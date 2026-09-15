@@ -139,7 +139,8 @@ def collect_test_graph(subject: Path, production_modules: set[str]) -> tuple[lis
     nodes: list[StaticNode] = []
     edges: set[StaticEdge] = set()
     for path in tests_root.rglob("*.py"):
-        if _skip(path) or "fixtures" in path.parts:
+        rel_under_tests = path.relative_to(tests_root)
+        if _skip(path) or "fixtures" in rel_under_tests.parts:
             continue
         rel = str(path.relative_to(subject)).replace("\\\\", "/")
         node_id = f"test:{rel}"
