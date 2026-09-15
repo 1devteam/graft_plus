@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "nodes": [],
+  "edges": [],
+  "invariants": [],
+  "notes": "Subject overlay. Residual until reviewed relationships are attached. Unresolved imports are facts, not missing files."
+}
