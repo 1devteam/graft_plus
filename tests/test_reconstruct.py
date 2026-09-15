@@ -36,3 +36,14 @@ def test_cli_writes_decipher_pack(tmp_path):
     assert rc == 0
     assert (out / "graph-architecture-decision.json").exists()
     assert (out / "dependency-graph.v1.json").exists()
+
+
+def test_frozen_negatives_cannot_grant_authority():
+    graph = build_graph(subject=FIXTURE)
+    completeness = audit(graph)
+    completeness = {**completeness, "integrity_pass": True, "unacknowledged_blocking_findings": []}
+    impact = analyze_impact(graph, [])
+    decision = decide(graph=graph, impact=impact, completeness=completeness)
+    assert decision["decision"]["architecture_disposition"] == "clear"
+    assert decision["decision"]["merge_authorization"] == "not-determined"
+    assert decision["grants_execution_authority"] is False
