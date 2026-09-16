@@ -69,6 +69,7 @@ CONFIG_SUFFIXES = {".cfg", ".ini", ".json", ".toml", ".yaml", ".yml"}
 CONTRACT_SUFFIXES = {".avsc", ".gql", ".graphql", ".proto", ".sql"}
 BUILD_SUFFIXES = {".csproj", ".fsproj", ".gradle", ".vbproj"}
 SPECIAL_FILES = {
+    ".env.example",
     "Dockerfile",
     "Makefile",
     "Procfile",

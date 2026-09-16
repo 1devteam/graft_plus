@@ -18,13 +18,20 @@ imports target declared repository packages, JVM imports target exact declared
 symbols, and Swift build-module imports remain unresolved unless the source
 tree proves their target.
 
-Schema 1.5 also emits `facts.relationship_boundaries`. Each row names the
+Schema 1.5 added `facts.relationship_boundaries`. Each row names the
 source file, line, language, evidence, and reason for a relationship that
 requires build or runtime context. The ledger covers dynamic loading,
 wildcard imports, dependency injection, router composition, generated source,
 code-generation declarations, and build-module mappings. `declared` rows are
 source-visible facts; `unresolved` rows identify the exact next inspection
 needed. Neither kind is converted into a speculative edge.
+
+Schema 1.6 adds bounded `evidence_anchor` objects to source-backed nodes and
+edges. Anchors name the source, start and end lines, symbol when known,
+detector, and whether the location is line- or file-precise. It also parses
+declarations and exact imports in Proto, GraphQL, SQL, and Avro sources;
+records literal source consumers; and maps configuration-key names plus
+deployment structure without retaining configuration values or secrets.
 
 Edges use consumer-to-dependency direction. A reverse walk therefore answers
 "what can this change affect?" and a forward walk answers "what does this
@@ -40,9 +47,11 @@ Intent is kept honest in two layers:
   actions, authority boundaries, invariants, and proof bundles. Those concepts
   are not guessed from names.
 
-Function topology is deliberately selective. Add repository-relative paths to
-`function_roots` in the overlay to emit `python_function`, `defines_function`,
-`calls_function`, and `tests_function` facts for composition-heavy code.
+Function topology is participation-based. Python functions are emitted when
+they participate in an exact local or imported call, direct test import, route
+declaration, or entrypoint convention. Repository-relative `function_roots`
+in the overlay may deliberately retain every top-level function in a selected
+composition root. Unrelated isolated helpers stay out of the artifact.
 
 The remaining reports answer narrower questions:
 

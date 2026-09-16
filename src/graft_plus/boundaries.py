@@ -30,6 +30,7 @@ def _row(
     language: str,
     evidence: str,
     reason: str,
+    detector: str | None = None,
 ) -> dict[str, Any]:
     return {
         "kind": kind,
@@ -39,6 +40,7 @@ def _row(
         "language": language,
         "evidence": _evidence(evidence),
         "reason": reason,
+        "detector": detector or ("python_ast" if language == "python" else "source_pattern"),
     }
 
 
@@ -302,13 +304,81 @@ def _is_build_file(path: Path) -> bool:
     return path.name in BUILD_FILES or path.suffix.lower() in {".csproj", ".fsproj", ".gradle", ".vbproj"}
 
 
+def mask_noncode(text: str, language: str) -> str:
+    """Blank comments and string bodies while preserving offsets and lines."""
+    slash_comments = language in {"dotnet", "go", "javascript", "jvm", "php", "rust", "swift"}
+    hash_comments = language in {"php", "ruby"}
+    dash_comments = language in {"elixir", "lua"}
+    output = list(text)
+    quote: str | None = None
+    block = False
+    escaped = False
+    index = 0
+    while index < len(text):
+        char = text[index]
+        pair = text[index : index + 2]
+        if block:
+            if pair == "*/":
+                output[index] = output[index + 1] = " "
+                block = False
+                index += 2
+                continue
+            if char != "\n":
+                output[index] = " "
+            index += 1
+            continue
+        if quote:
+            if char == "\n" and quote != "`":
+                quote = None
+                escaped = False
+                index += 1
+                continue
+            if char != "\n":
+                output[index] = " "
+            if escaped:
+                escaped = False
+            elif char == "\\":
+                escaped = True
+            elif char == quote:
+                quote = None
+            index += 1
+            continue
+        if slash_comments and pair == "/*":
+            output[index] = output[index + 1] = " "
+            block = True
+            index += 2
+            continue
+        if (slash_comments and pair == "//") or (dash_comments and pair == "--"):
+            end = text.find("\n", index)
+            end = len(text) if end < 0 else end
+            for position in range(index, end):
+                output[position] = " "
+            index = end
+            continue
+        if hash_comments and char == "#":
+            end = text.find("\n", index)
+            end = len(text) if end < 0 else end
+            for position in range(index, end):
+                output[position] = " "
+            index = end
+            continue
+        if char in {"'", '"'} or (language == "javascript" and char == "`"):
+            output[index] = " "
+            quote = char
+        index += 1
+    return "".join(output)
+
+
 def _line_boundaries(path: Path, source: str, text: str) -> list[dict[str, Any]]:
     language = SUFFIX_LANGUAGE.get(path.suffix.lower(), "build")
     rows: list[dict[str, Any]] = []
-    in_block_comment = False
+    code_lines = mask_noncode(text, language).splitlines()
+    header_open = True
     for number, line in enumerate(text.splitlines(), start=1):
+        code_line = code_lines[number - 1] if number <= len(code_lines) else ""
         stripped = line.lstrip()
-        generated_header = number <= 5 and stripped.startswith(("#", "//", "/*", "*", "<!--"))
+        comment_line = stripped.startswith(("#", "//", "/*", "*", "<!--"))
+        generated_header = header_open and comment_line
         generated_marker = generated_header and bool(GENERATED_MARKERS.search(line))
         if generated_marker:
             rows.append(
@@ -349,20 +419,20 @@ def _line_boundaries(path: Path, source: str, text: str) -> list[dict[str, Any]]
                     reason="Build configuration can alter source-module resolution.",
                 )
             )
-        if in_block_comment:
-            if "*/" in stripped:
-                in_block_comment = False
-            continue
-        if stripped.startswith("/*"):
-            if "*/" not in stripped:
-                in_block_comment = True
-            continue
-        if stripped.startswith(("#", "//", "--", "*")):
-            continue
-        if stripped.startswith(("'", '"', "`")):
-            continue
+        if stripped and not comment_line:
+            header_open = False
         for kind, status, pattern_language, pattern, reason in LINE_PATTERNS:
-            if pattern_language != language or not pattern.search(line):
+            if pattern_language != language:
+                continue
+            scan_line = line if kind == "dynamic_load" else code_line
+            match = pattern.search(scan_line)
+            if match is None:
+                continue
+            significant = next(
+                (position for position in range(match.start(), match.end()) if not line[position].isspace()),
+                match.start(),
+            )
+            if significant >= len(code_line) or code_line[significant] != line[significant]:
                 continue
             rows.append(
                 _row(
@@ -373,6 +443,7 @@ def _line_boundaries(path: Path, source: str, text: str) -> list[dict[str, Any]]
                     language=language,
                     evidence=line,
                     reason=reason,
+                    detector="lexical_pattern",
                 )
             )
     return rows

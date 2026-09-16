@@ -10,6 +10,9 @@ from typing import Any
 
 from graft_plus.adapters import collect_javascript_graph, collect_shell_graph
 from graft_plus.boundaries import collect_relationship_boundaries
+from graft_plus.configuration import collect_configuration_graph
+from graft_plus.contracts import collect_contract_file_graph
+from graft_plus.evidence import attach_evidence_anchors
 from graft_plus.functions import collect_function_graph
 from graft_plus.graph_types import StaticEdge, StaticNode
 from graft_plus.inventory import collect_package_topology, inventory_nodes, relevant_files
@@ -292,6 +295,29 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     ]
     edges.extend(e for e in semantic["edges"] if e.get("from") and e.get("to"))
     edges.extend(function_edges)
+    function_ids = {str(node["id"]) for node in function_nodes}
+    for route in semantic["nodes"]:
+        if route.get("type") != "http_route" or not route.get("handler"):
+            continue
+        source = str(route.get("source") or "")
+        module_id = python_by_source.get(source)
+        if not module_id:
+            continue
+        target = f"fn:{module_id.removeprefix('py:')}:{route['handler']}"
+        if target in function_ids:
+            edges.append(
+                {
+                    "from": route["id"],
+                    "to": target,
+                    "type": "handled_by",
+                    "evidence": source,
+                    "start_line": route.get("start_line"),
+                    "end_line": route.get("end_line"),
+                    "symbol": route["handler"],
+                    "detector": route.get("detector") or "python_ast",
+                    "layer": "generated",
+                }
+            )
     for item in overlay.get("edges") or []:
         edge = dict(item)
         edge.setdefault("layer", "overlay")
@@ -304,6 +330,16 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     package_nodes, package_edges = collect_package_topology(subject, source_node_ids)
     nodes.extend(package_nodes)
     edges.extend(package_edges)
+    contract_file_nodes, contract_file_edges, contract_file_facts = collect_contract_file_graph(
+        subject, source_node_ids
+    )
+    nodes.extend(contract_file_nodes)
+    edges.extend(contract_file_edges)
+    configuration_nodes, configuration_edges, configuration_facts = collect_configuration_graph(
+        subject, source_node_ids
+    )
+    nodes.extend(configuration_nodes)
+    edges.extend(configuration_edges)
     mapped_sources = {
         str(node["source"])
         for node in nodes
@@ -356,6 +392,15 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     )
     if missing:
         raise ValueError(f"undefined edge endpoints: {', '.join(missing)}")
+    attach_evidence_anchors(subject, nodes, edges)
+    evidence_precision_counts = {
+        "nodes": dict(
+            sorted(Counter(str(node.get("evidence_anchor", {}).get("precision") or "none") for node in nodes).items())
+        ),
+        "edges": dict(
+            sorted(Counter(str(edge.get("evidence_anchor", {}).get("precision") or "none") for edge in edges).items())
+        ),
+    }
     edge_by_key: dict[str, dict[str, Any]] = {}
     for edge in edges:
         key = json.dumps(edge, sort_keys=True, separators=(",", ":"))
@@ -370,7 +415,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             overlay_rel = str(overlay_path)
     overlay_count = sum(1 for n in nodes if n.get("layer") == "overlay")
     return {
-        "schema_version": "1.5",
+        "schema_version": "1.6",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -394,6 +439,9 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
                 "swift",
                 "package-manifests",
                 "relationship-boundary-ledger",
+                "contract-declarations",
+                "configuration-deployment",
+                "evidence-anchors",
             ],
             "function_roots": overlay.get("function_roots") or [],
             "overlay": overlay_rel,
@@ -407,6 +455,9 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             "declared_external_imports": declared_external_imports,
             **inventory_facts,
             **boundary_facts,
+            **contract_file_facts,
+            **configuration_facts,
+            "evidence_precision_counts": evidence_precision_counts,
         },
         "metrics": {
             **_metrics(node_ids, edges),
@@ -423,6 +474,11 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             "relationship_boundary_counts_by_kind": boundary_facts[
                 "relationship_boundary_counts_by_kind"
             ],
+            "contract_source_count": contract_file_facts["contract_source_count"],
+            "contract_declaration_count": contract_file_facts["contract_declaration_count"],
+            "configuration_key_count": configuration_facts["configuration_key_count"],
+            "deployment_fact_count": configuration_facts["deployment_fact_count"],
+            "evidence_precision_counts": evidence_precision_counts,
         },
     }
 
