@@ -288,37 +288,12 @@ def collect_egress(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
 
 
 def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    nodes: list[dict[str, Any]] = []
-    edges: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    declarations: list[dict[str, str | None]] = []
 
     def add_route(method: str, path_lit: str, rel: str, module: str | None, handler: str | None = None) -> None:
-        method = method.upper()
-        route_id = f"route:{method} {path_lit}"
-        if route_id in seen:
-            return
-        seen.add(route_id)
-        nodes.append(
-            {
-                "id": route_id,
-                "type": "http_route",
-                "source": rel,
-                "layer": "generated",
-                "method": method,
-                "path": path_lit,
-                "handler": handler,
-            }
+        declarations.append(
+            {"method": method.upper(), "path": path_lit, "source": rel, "module": module, "handler": handler}
         )
-        if module:
-            edges.append(
-                {
-                    "from": f"py:{module}",
-                    "to": route_id,
-                    "type": "exposes_route",
-                    "evidence": rel,
-                    "layer": "generated",
-                }
-            )
 
     for path in _production_py(subject):
         rel = _rel(subject, path)
@@ -364,6 +339,48 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
             continue
         for match in js_re.finditer(text):
             add_route(match.group(1), match.group(2), rel, None)
+
+    declaration_sources: dict[tuple[str, str], set[str]] = defaultdict(set)
+    for declaration in declarations:
+        key = (str(declaration["method"]), str(declaration["path"]))
+        declaration_sources[key].add(str(declaration["module"] or declaration["source"]))
+
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for declaration in declarations:
+        method = str(declaration["method"])
+        path_lit = str(declaration["path"])
+        rel = str(declaration["source"])
+        module = declaration["module"]
+        identity = (method, path_lit)
+        route_id = f"route:{method} {path_lit}"
+        if len(declaration_sources[identity]) > 1:
+            route_id = f"{route_id}:{module or rel}"
+        if route_id in seen:
+            continue
+        seen.add(route_id)
+        nodes.append(
+            {
+                "id": route_id,
+                "type": "http_route",
+                "source": rel,
+                "layer": "generated",
+                "method": method,
+                "path": path_lit,
+                "handler": declaration["handler"],
+            }
+        )
+        if module:
+            edges.append(
+                {
+                    "from": f"py:{module}",
+                    "to": route_id,
+                    "type": "exposes_route",
+                    "evidence": rel,
+                    "layer": "generated",
+                }
+            )
 
     return nodes, edges
 
@@ -513,7 +530,6 @@ def collect_semantic(subject: Path) -> dict[str, Any]:
     orm_nodes, orm_edges = collect_orm_tables(subject)
     known_tables = {n["id"] for n in mig_nodes if n.get("type") == "database_table"}
     orm_nodes = [n for n in orm_nodes if n["id"] not in known_tables]
-    orm_edges = [e for e in orm_edges if e["to"] not in known_tables]
     egress_nodes, egress_edges = collect_egress(subject)
     route_nodes, route_edges = collect_routes(subject)
     contract_nodes, contract_edges = collect_contracts(subject)
