@@ -33,6 +33,8 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
         review.append("unmapped_source_files")
     if residuals.get("relationship_unparsed_files"):
         review.append("partial_relationship_coverage")
+    if residuals.get("unresolved_relationship_boundary_count"):
+        review.append("runtime_or_build_context_required")
     if residuals.get("stale_graph_sources"):
         review.append("stale_graph_sources")
     if (completeness.get("integrity") or {}).get("known_violations"):
@@ -74,6 +76,9 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
             "unmapped_source_files": residuals.get("unmapped_source_files") or [],
             "stale_graph_sources": residuals.get("stale_graph_sources") or [],
             "relationship_unparsed_files": residuals.get("relationship_unparsed_files") or [],
+            "relationship_boundary_count": residuals.get("relationship_boundary_count") or 0,
+            "unresolved_relationship_boundary_count": residuals.get("unresolved_relationship_boundary_count") or 0,
+            "relationship_boundary_counts_by_kind": residuals.get("relationship_boundary_counts_by_kind") or {},
         },
         "residuals": residuals,
         "impact": {
