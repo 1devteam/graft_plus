@@ -1,6 +1,9 @@
 # Reading a G.R.A.F.T.+ pack
 
-Start with `graph-architecture-decision.json`, then use
+Start with `AI-RECEIVER.md`. It gives the receiving AI a conservative read
+order, question patterns, evidence rules, and a required Proven / Inferred /
+Unknown / Next inspection answer discipline. Then use
+`graft-plus-receipt.json` to confirm the subject revision and
 `dependency-graph.v1.json` for the evidence behind the summary.
 
 The graph is a source-backed map, not a source dump and not an adjudicator. It

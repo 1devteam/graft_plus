@@ -21,6 +21,7 @@ AppSend = Callable[[dict[str, Any]], Awaitable[None]]
 
 MAX_REQUEST_BYTES = 8 * 1024
 PACK_FILES = (
+    "AI-RECEIVER.md",
     "graph-architecture-decision.json",
     "dependency-graph.v1.json",
     "graph-completeness-report.json",

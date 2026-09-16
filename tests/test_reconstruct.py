@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 from graft_plus.cli import reconstruct
@@ -34,8 +35,16 @@ def test_cli_writes_decipher_pack(tmp_path):
     out = tmp_path / "pack"
     rc = reconstruct(FIXTURE, out, None, None, None)
     assert rc == 0
+    guide = (out / "AI-RECEIVER.md").read_text(encoding="utf-8")
+    assert "source-backed reconstruction" in guide
+    assert "Proven" in guide
+    assert "Inferred" in guide
+    assert "Unknown" in guide
+    assert "Next inspection" in guide
     assert (out / "graph-architecture-decision.json").exists()
     assert (out / "dependency-graph.v1.json").exists()
+    receipt = json.loads((out / "graft-plus-receipt.json").read_text(encoding="utf-8"))
+    assert receipt["files"][0] == "AI-RECEIVER.md"
 
 
 def test_frozen_negatives_cannot_grant_authority():
@@ -53,6 +62,7 @@ def test_artifact_is_reconstruction_not_source_dump(tmp_path):
     out = tmp_path / "pack"
     assert reconstruct(FIXTURE, out, None, None, None) == 0
     names = {p.name for p in out.iterdir()}
+    assert "AI-RECEIVER.md" in names
     assert "graph-architecture-decision.json" in names
     assert "dependency-graph.v1.json" in names
     assert "graph-completeness-report.json" in names
@@ -206,4 +216,3 @@ def test_completeness_ratchet_acknowledgement_is_not_repair():
     assert passed["decision"]["architecture_disposition"] == "clear"
     assert "known_violations_visible" in passed["decision"]["review_reasons"]
     assert passed["decision"]["merge_authorization"] == "not-determined"
-
