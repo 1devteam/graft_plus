@@ -35,7 +35,9 @@ pip install -e ".[dev]"
 graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
 ```
 
-Decipher `graph-architecture-decision.json` first. See [docs/ARTIFACT.md](docs/ARTIFACT.md).
+Give the complete pack to the receiving AI; `AI-RECEIVER.md` tells it how to
+interpret the evidence without overstating what static reconstruction proves.
+See [docs/ARTIFACT.md](docs/ARTIFACT.md).
 
 ## Stateless web boundary
 
