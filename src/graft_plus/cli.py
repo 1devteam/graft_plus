@@ -1,4 +1,4 @@
-"""CLI: reconstruct a subject into a decipher pack using the Ajenda graph scripts."""
+"""CLI: reconstruct a subject into a decipher pack. Universal graph shell."""
 
 from __future__ import annotations
 
@@ -7,8 +7,12 @@ import json
 import subprocess
 from pathlib import Path
 
-from graft_plus.ajenda_bind import reconstruct_with_ajenda
+from graft_plus.completeness import audit
+from graft_plus.decision import decide
 from graft_plus.fetch import clone_public_repo
+from graft_plus.graph import build_graph, load_overlay
+from graft_plus.impact import analyze_impact, changed_files
+from graft_plus.proof import select_proofs
 
 
 def _write(path: Path, payload: dict) -> None:
@@ -28,20 +32,42 @@ def reconstruct(
     base_ref: str | None,
     head_ref: str | None,
 ) -> int:
-    del overlay  # overlay is the subject's docs/contracts file; Ajenda scripts load it
-    pack = reconstruct_with_ajenda(subject, out, base_ref, head_ref)
-    graph = pack["graph"]
-    completeness = pack["completeness"]
-    decision = pack["decision"]
-    integrity = (completeness.get("integrity") or {}).get("pass") is True
-    blocking = (completeness.get("integrity") or {}).get("unacknowledged_blocking_findings") or []
+    graph = build_graph(subject=subject, overlay_path=overlay)
+    overlay_payload = load_overlay(overlay)
+    impact = {
+        "schema_version": "1.2",
+        "changed_files": [],
+        "changed_nodes": [],
+        "unmapped_changed_files": [],
+        "upstream_consumers": [],
+        "downstream_dependencies": [],
+        "impacted_tests": [],
+        "affected_semantic_nodes": [],
+        "dependency_semantic_nodes": [],
+        "relevant_invariants": [],
+        "changed_node_count": 0,
+        "changed_file_count": 0,
+        "unmapped_changed_file_count": 0,
+        "impacted_test_count": 0,
+        "note": "no git range requested; blast-radius fields are present and empty",
+    }
+    if base_ref and head_ref:
+        impact = analyze_impact(graph, changed_files(subject, base_ref, head_ref))
+    completeness = audit(graph, overlay_payload, impact, subject)
+    proofs = select_proofs(impact, overlay_payload)
+    decision = decide(graph=graph, impact=impact, completeness=completeness)
+    _write(out / "dependency-graph.v1.json", graph)
+    _write(out / "graph-completeness-report.json", completeness)
+    _write(out / "graph-impact-report.json", impact)
+    _write(out / "graph-proof-manifest.json", proofs)
+    _write(out / "graph-architecture-decision.json", decision)
     receipt = {
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
-        "engine": "ajenda-graph-as-is",
+        "engine": "universal-shell",
         "subject": str(subject),
         "subject_sha": _git_sha(subject),
-        "status": "passed" if integrity and not blocking else "failed",
+        "status": "passed" if completeness.get("integrity_pass") and not completeness.get("unacknowledged_blocking_findings") else "failed",
         "decipher": "graph-architecture-decision.json",
         "files": [
             "graph-architecture-decision.json",

@@ -1,8 +1,8 @@
 # G.R.A.F.T.+ (`graft_plus`)
 
-The graph pipeline copied as-is from [1devteam/ajenda-ai](https://github.com/1devteam/ajenda-ai) `@501d5c95` `scripts/validation/`.
+Universal reconstruction shell. Point it at a public repository. It writes a pack an AI can read.
 
-Ajenda-specific catalogs, overlays, and proof bundles are still in those files. Extract them later. Do not rewrite the scripts in place.
+Ajenda graph scripts are archived under `docs/origin/` for provenance. They are not the live engine.
 
 ```text
 product: G.R.A.F.T.+
@@ -13,14 +13,17 @@ merge_authorization: not-determined
 grants_execution_authority: false
 ```
 
-## Run
+Live engine:
+
+- generated inventory (modules, tests, imports, migrations, tables, routes, egress, surfaces)
+- optional overlay (ownership, authority, policy) — residual until attached
+- blast radius when a git range is given
+- completeness ratchet (acknowledgement is not a repair)
+- architecture decision that never grants merge
 
 ```bash
 pip install -e ".[dev]"
 graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
-graft-plus reconstruct --subject /path/to/repo --out artifacts/graft-pack
 ```
 
-Decipher `graph-architecture-decision.json` first.
-
-Copied scripts live in `src/graft_plus/ajenda_graph/`. Provenance: `src/graft_plus/ajenda_graph/SOURCE.txt`. Ajenda overlay example: `examples/ajenda/`.
+Decipher `graph-architecture-decision.json` first. See [docs/ARTIFACT.md](docs/ARTIFACT.md).
