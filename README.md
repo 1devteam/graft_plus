@@ -27,3 +27,19 @@ graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
 ```
 
 Decipher `graph-architecture-decision.json` first. See [docs/ARTIFACT.md](docs/ARTIFACT.md).
+
+## Stateless web boundary
+
+The optional HTTP adapter runs this same canonical engine for the public
+1devteam.com workbench:
+
+```bash
+pip install -e ".[service]"
+GRAFT_ALLOWED_ORIGINS=https://1devteam.com,https://www.1devteam.com graft-plus-api
+```
+
+`POST /v1/reconstruct` accepts a public GitHub `repository` and optional
+`ref`, then returns the validated pack as a ZIP. Source and artifacts exist
+only in a bounded temporary workspace and are removed before the response is
+sent. Responses are `no-store`; the service has no account, history, plan, or
+merge-authority surface.
