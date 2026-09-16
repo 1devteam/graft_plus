@@ -19,9 +19,12 @@ Live engine:
 - Python, JavaScript/TypeScript/CommonJS, shell/Bats, Go, Rust, Ruby, PHP,
   C/C++, Java/Kotlin/Scala, C#, Lua, Elixir, and Swift source relationships
 - package, workspace, dependency, and entrypoint declarations
-- optional function/call/test-function topology for overlay-selected composition roots
+- participation-based Python function/call/test/route-handler topology
 - migrations, tables, routes, contracts, network egress, and delivery surfaces
 - source-and-line boundary ledger for relationships requiring build or runtime context
+- declaration topology for Proto, GraphQL, SQL, and Avro contract sources
+- environment-name and deployment-structure topology without secret values
+- bounded source/line/symbol evidence anchors on generated facts
 - optional overlay (ownership, authority, policy) — residual until attached
 - blast radius when a git range is given
 - completeness ratchet (acknowledgement is not a repair)

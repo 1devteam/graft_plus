@@ -274,6 +274,9 @@ def collect_egress(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
                 "calls": calls,
                 "hosts": hosts,
                 "classification": "unclassified",
+                "start_line": int(calls[0]["line"] or 1),
+                "end_line": int(calls[-1]["line"] or calls[0]["line"] or 1),
+                "detector": "python_ast",
             }
         )
         edges.append(
@@ -282,6 +285,9 @@ def collect_egress(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
                 "to": sink_id,
                 "type": "network_call",
                 "evidence": rel,
+                "start_line": int(calls[0]["line"] or 1),
+                "end_line": int(calls[-1]["line"] or calls[0]["line"] or 1),
+                "detector": "python_ast",
                 "layer": "generated",
             }
         )
@@ -289,11 +295,30 @@ def collect_egress(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
 
 
 def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    declarations: list[dict[str, str | None]] = []
+    declarations: list[dict[str, Any]] = []
 
-    def add_route(method: str, path_lit: str, rel: str, module: str | None, handler: str | None = None) -> None:
+    def add_route(
+        method: str,
+        path_lit: str,
+        rel: str,
+        module: str | None,
+        handler: str | None = None,
+        *,
+        start_line: int,
+        end_line: int,
+        detector: str,
+    ) -> None:
         declarations.append(
-            {"method": method.upper(), "path": path_lit, "source": rel, "module": module, "handler": handler}
+            {
+                "method": method.upper(),
+                "path": path_lit,
+                "source": rel,
+                "module": module,
+                "handler": handler,
+                "start_line": start_line,
+                "end_line": end_line,
+                "detector": detector,
+            }
         )
 
     for path in _production_py(subject):
@@ -309,7 +334,15 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
                 if name in {"path", "re_path", "url"} and item.args:
                     path_lit = _literal_string(item.args[0])
                     if path_lit:
-                        add_route("ANY", path_lit, rel, module)
+                        add_route(
+                            "ANY",
+                            path_lit,
+                            rel,
+                            module,
+                            start_line=item.lineno,
+                            end_line=getattr(item, "end_lineno", item.lineno),
+                            detector="python_ast",
+                        )
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             for decorator in item.decorator_list:
@@ -321,11 +354,29 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
                 if last == "route" and path_lit:
                     methods = _literal_strings(_keyword(decorator, "methods")) or ("GET",)
                     for method in methods:
-                        add_route(method, path_lit, rel, module, item.name)
+                        add_route(
+                            method,
+                            path_lit,
+                            rel,
+                            module,
+                            item.name,
+                            start_line=decorator.lineno,
+                            end_line=getattr(item, "end_lineno", item.lineno),
+                            detector="python_ast",
+                        )
                     continue
                 if last not in _ROUTE_METHODS or not path_lit:
                     continue
-                add_route(last, path_lit, rel, module, item.name)
+                add_route(
+                    last,
+                    path_lit,
+                    rel,
+                    module,
+                    item.name,
+                    start_line=decorator.lineno,
+                    end_line=getattr(item, "end_lineno", item.lineno),
+                    detector="python_ast",
+                )
 
     js_re = re.compile(
         r"\b(?:app|router|api)\.(get|post|put|patch|delete|all)\(\s*['\"]([^'\"]+)['\"]\s*(?:,\s*([A-Za-z_$][\w$]*))?",
@@ -343,7 +394,17 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
         except OSError:
             continue
         for match in js_re.finditer(text):
-            add_route(match.group(1), match.group(2), rel, f"js:{rel}", match.group(3))
+            line = text.count("\n", 0, match.start()) + 1
+            add_route(
+                match.group(1),
+                match.group(2),
+                rel,
+                f"js:{rel}",
+                match.group(3),
+                start_line=line,
+                end_line=line,
+                detector="javascript_route_pattern",
+            )
 
     declaration_sources: dict[tuple[str, str], set[str]] = defaultdict(set)
     for declaration in declarations:
@@ -374,6 +435,9 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
                 "method": method,
                 "path": path_lit,
                 "handler": declaration["handler"],
+                "start_line": declaration["start_line"],
+                "end_line": declaration["end_line"],
+                "detector": declaration["detector"],
             }
         )
         if module:
@@ -383,6 +447,10 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
                     "to": route_id,
                     "type": "exposes_route",
                     "evidence": rel,
+                    "start_line": declaration["start_line"],
+                    "end_line": declaration["end_line"],
+                    "symbol": declaration["handler"],
+                    "detector": declaration["detector"],
                     "layer": "generated",
                 }
             )
@@ -432,6 +500,9 @@ def collect_orm_tables(subject: Path) -> tuple[list[dict[str, Any]], list[dict[s
                         "source": rel,
                         "layer": "generated",
                         "orm": "sqlalchemy" if not django else "django",
+                        "start_line": item.lineno,
+                        "end_line": getattr(item, "end_lineno", item.lineno),
+                        "detector": "python_ast",
                     }
                 )
             edges.append(
@@ -440,6 +511,10 @@ def collect_orm_tables(subject: Path) -> tuple[list[dict[str, Any]], list[dict[s
                     "to": tid,
                     "type": "defines_table",
                     "evidence": rel,
+                    "start_line": item.lineno,
+                    "end_line": getattr(item, "end_lineno", item.lineno),
+                    "symbol": table,
+                    "detector": "python_ast",
                     "layer": "generated",
                 }
             )
@@ -492,6 +567,9 @@ def collect_contracts(subject: Path) -> tuple[list[dict[str, Any]], list[dict[st
                     "name": item.name,
                     "bases": bases,
                     "kind": "dataclass" if is_dataclass else "model",
+                    "start_line": item.lineno,
+                    "end_line": getattr(item, "end_lineno", item.lineno),
+                    "detector": "python_ast",
                 }
             )
             edges.append(
@@ -500,6 +578,10 @@ def collect_contracts(subject: Path) -> tuple[list[dict[str, Any]], list[dict[st
                     "to": cid,
                     "type": "defines_contract",
                     "evidence": rel,
+                    "start_line": item.lineno,
+                    "end_line": getattr(item, "end_lineno", item.lineno),
+                    "symbol": item.name,
+                    "detector": "python_ast",
                     "layer": "generated",
                 }
             )
@@ -516,6 +598,7 @@ def collect_contracts(subject: Path) -> tuple[list[dict[str, Any]], list[dict[st
             continue
         for match in _TS_INTERFACE_RE.finditer(text):
             name = match.group(1)
+            line = text.count("\n", 0, match.start()) + 1
             cid = f"contract:{rel}:{name}"
             nodes.append(
                 {
@@ -525,6 +608,9 @@ def collect_contracts(subject: Path) -> tuple[list[dict[str, Any]], list[dict[st
                     "layer": "generated",
                     "name": name,
                     "kind": "typescript",
+                    "start_line": line,
+                    "end_line": line,
+                    "detector": "typescript_declaration_pattern",
                 }
             )
             edges.append(
@@ -533,6 +619,10 @@ def collect_contracts(subject: Path) -> tuple[list[dict[str, Any]], list[dict[st
                     "to": cid,
                     "type": "defines_contract",
                     "evidence": rel,
+                    "start_line": line,
+                    "end_line": line,
+                    "symbol": name,
+                    "detector": "typescript_declaration_pattern",
                     "layer": "generated",
                 }
             )

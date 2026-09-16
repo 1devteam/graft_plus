@@ -47,6 +47,8 @@ TYPE_BOUNDARY = {
     "network_egress_sink": "external-egress",
     "http_route": "http-route",
     "contract": "contract",
+    "contract_source": "contract",
+    "configuration_key": "configuration",
     "state_resource": "state-authority",
     "ci_workflow": "ci",
     "docker": "docker",
@@ -309,6 +311,17 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
             (graph.get("facts") or {}).get("relationship_boundary_counts_by_kind") or {}
         ),
         "relationship_boundaries": list((graph.get("facts") or {}).get("relationship_boundaries") or []),
+        "evidence_precision_counts": dict((graph.get("facts") or {}).get("evidence_precision_counts") or {}),
+        "contract_source_count": int((graph.get("facts") or {}).get("contract_source_count") or 0),
+        "contract_declaration_count": int((graph.get("facts") or {}).get("contract_declaration_count") or 0),
+        "contract_declaration_counts_by_kind": dict(
+            (graph.get("facts") or {}).get("contract_declaration_counts_by_kind") or {}
+        ),
+        "configuration_key_count": int((graph.get("facts") or {}).get("configuration_key_count") or 0),
+        "deployment_fact_count": int((graph.get("facts") or {}).get("deployment_fact_count") or 0),
+        "deployment_fact_counts_by_kind": dict(
+            (graph.get("facts") or {}).get("deployment_fact_counts_by_kind") or {}
+        ),
         "stale_graph_source_count": coverage.get("stale_graph_source_count", 0),
         "stale_graph_sources": coverage.get("stale_graph_sources") or [],
         "known_violations": known_violations,
@@ -342,6 +355,9 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
             "semantic_finding_count": len(findings),
             "unmapped_source_file_count": coverage.get("unmapped_source_file_count", 0),
             "relationship_unparsed_file_count": coverage.get("relationship_unparsed_file_count", 0),
+            "evidence_precision_counts": dict(
+                (graph.get("facts") or {}).get("evidence_precision_counts") or {}
+            ),
             "unresolved_relationship_boundary_count": int(
                 (graph.get("facts") or {}).get("unresolved_relationship_boundary_count") or 0
             ),
