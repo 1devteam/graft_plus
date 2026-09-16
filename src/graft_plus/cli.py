@@ -157,7 +157,7 @@ def reconstruct(
     completeness = audit(graph, overlay_payload, impact, subject)
     proofs = select_proofs(impact, overlay_payload)
     decision = decide(graph=graph, impact=impact, completeness=completeness)
-    _write_receiver_guide(out / "AI-RECEIVER.md")
+    _write_receiver_guide(out / "00-AI-READ-FIRST.md")
     _write(out / "dependency-graph.v1.json", graph)
     _write(out / "graph-completeness-report.json", completeness)
     _write(out / "graph-impact-report.json", impact)
@@ -172,7 +172,7 @@ def reconstruct(
         "status": "passed" if completeness.get("integrity_pass") and not completeness.get("unacknowledged_blocking_findings") else "failed",
         "decipher": "graph-architecture-decision.json",
         "files": [
-            "AI-RECEIVER.md",
+            "00-AI-READ-FIRST.md",
             "graph-architecture-decision.json",
             "dependency-graph.v1.json",
             "graph-completeness-report.json",
