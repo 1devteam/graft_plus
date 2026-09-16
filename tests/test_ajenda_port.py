@@ -1,38 +1,34 @@
 from pathlib import Path
 
-from graft_plus.ajenda_bind import GRAPH_DIR, reconstruct_with_ajenda
 from graft_plus.cli import reconstruct
+from graft_plus.graph import build_graph
 
+LIVE = Path(__file__).resolve().parents[1] / "src" / "graft_plus"
+ORIGIN = Path(__file__).resolve().parents[1] / "docs" / "origin" / "ajenda_graph"
 FIXTURE = Path(__file__).parent / "fixtures" / "tiny_subject"
-ORIGIN = [
-    "build_dependency_graph.py",
-    "graph_semantic_inventory.py",
-    "graph_impact_analysis.py",
-    "graph_proof_selection.py",
-    "graph_completeness_audit.py",
-    "graph_architecture_decision.py",
-    "graph_function_inventory.py",
-    "graph_runtime_contract_inventory.py",
-    "graft_plus_gate.py",
-]
 
 
-def test_ajenda_scripts_are_present_as_copied():
-    for name in ORIGIN:
-        path = GRAPH_DIR / name
-        assert path.exists(), name
-        text = path.read_text(encoding="utf-8")
-        assert "Ajenda" in text or "canonical" in text or "graph" in text.lower()
-    assert (GRAPH_DIR / "SOURCE.txt").read_text().startswith("Copied as-is")
+def test_live_engine_does_not_contain_ajenda_catalogs():
+    blob = ""
+    for path in LIVE.rglob("*.py"):
+        blob += path.read_text(encoding="utf-8")
+    assert "job_catalog.py" not in blob
+    assert "hubspot" not in blob.lower()
+    assert "tenant-isolation-proof" not in blob
+    assert "ajenda_bind" not in blob
+    assert "ajenda_graph" not in blob
 
 
-def test_cli_uses_ajenda_pipeline(tmp_path):
+def test_origin_copy_is_archived_not_imported():
+    assert (ORIGIN / "build_dependency_graph.py").exists()
+    assert (ORIGIN / "SOURCE.txt").exists()
+
+
+def test_universal_cli_does_not_block_on_missing_overlay(tmp_path):
     out = tmp_path / "pack"
     rc = reconstruct(FIXTURE, out, None, None, None)
     assert rc == 0
-    decision = (out / "graph-architecture-decision.json").read_text()
-    assert "not-determined" in decision
-    assert (out / "dependency-graph.v1.json").exists()
-    assert (out / "graph-completeness-report.json").exists()
-    assert (out / "graph-impact-report.json").exists()
-    assert (out / "graph-proof-manifest.json").exists()
+    graph = build_graph(subject=FIXTURE)
+    types = {n["type"] for n in graph["nodes"]}
+    assert "business_job" not in types
+    assert "runtime_action" not in types
