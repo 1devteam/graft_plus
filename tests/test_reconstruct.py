@@ -47,3 +47,25 @@ def test_frozen_negatives_cannot_grant_authority():
     assert decision["decision"]["architecture_disposition"] == "clear"
     assert decision["decision"]["merge_authorization"] == "not-determined"
     assert decision["grants_execution_authority"] is False
+
+
+def test_pack_replaces_site_snapshot(tmp_path):
+    import json, zipfile
+    out = tmp_path / "pack"
+    assert reconstruct(FIXTURE, out, None, None, None) == 0
+    assert (out / "GRAFT-MAP.md").exists()
+    assert (out / "GRAFT-PACK.json").exists()
+    payload = json.loads((out / "GRAFT-PACK.json").read_text())
+    assert payload["schema"] == "graft-pack-1"
+    assert payload["implementsPlan"] is False
+    assert payload["mergeAuthorization"] == "not-determined"
+    text = (out / "GRAFT-MAP.md").read_text()
+    assert "How to read this" in text
+    assert "not a plan" in text.lower()
+    zips = list(out.glob("GRAFT-PACK-*.zip"))
+    assert zips
+    with zipfile.ZipFile(zips[0]) as zf:
+        names = zf.namelist()
+    assert "GRAFT-MAP.md" in names
+    assert "GRAFT-PACK.json" in names
+    assert any(n.startswith("tree/") for n in names)

@@ -31,4 +31,4 @@ Source lineage (do not copy Ajenda-only coupling):
 - job catalog, capability resolver, composition engine
 - `docs/contracts/dependency-graph.overlay.v1.json` Ajenda instance
 
-Ajenda CI should eventually invoke `graft-plus reconstruct` and keep those inventories as subject plugins. That wiring is a later Ajenda PR. Not this extract.
+This package is the 1devteam.com pack builder. It is not Ajenda's merge/CI gate. Ajenda may run reconstruct as a *subject* later; do not grow Ajenda graph scripts as the product.

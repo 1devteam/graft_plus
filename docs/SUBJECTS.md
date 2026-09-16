@@ -7,7 +7,7 @@ G.R.A.F.T.+ maps a *subject*. The subject is not this package.
 | This package | `1devteam/graft_plus` | Builder. Reconstruct itself in CI. |
 | Ajenda | `1devteam/ajenda-ai` | First reconstruction subject. Keeps mission-contract, job catalog, runtime inventories. |
 | Omnipath v2 | later | Second reconstruction subject. |
-| 1devteam.com | `1devteam/1devteam-web` | Hosts a published pack. Not the builder. Snapshot ingest on `/graft` is not G.R.A.F.T.+. |
+| 1devteam.com | `1devteam/1devteam-web` | Hosts a pack this CLI writes. `/graft` snapshot ingest is the thing this package replaces. |
 
 Ajenda CI should eventually run:
 

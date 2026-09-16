@@ -11,6 +11,7 @@ from graft_plus.completeness import audit
 from graft_plus.decision import decide
 from graft_plus.graph import build_graph
 from graft_plus.impact import analyze_impact, changed_files
+from graft_plus.pack import write_pack
 
 
 def _write(path: Path, payload: dict) -> None:
@@ -57,8 +58,17 @@ def reconstruct(subject: Path, out: Path, overlay: Path | None, base_ref: str | 
         "merge_authorization": "not-determined",
     }
     _write(out / "graft-plus-gate.json", receipt)
+    paths = write_pack(subject=subject, out=out, graph=graph, decision=decision)
+    receipt["pack"] = {
+        "schema": "graft-pack-1",
+        "map": "GRAFT-MAP.md",
+        "json": "GRAFT-PACK.json",
+        "zip": Path(paths["zip"]).name,
+    }
+    _write(out / "graft-plus-gate.json", receipt)
     print(f"G.R.A.F.T.+ {receipt['status']}: {decision['decision']['architecture_disposition']}")
-    print(f"Decipher: {out / 'graph-architecture-decision.json'}")
+    print(f"Pack: {paths['zip']}")
+    print(f"Map: {paths['map']}")
     print(f"Graph: {graph['metrics']['node_count']} nodes, {graph['metrics']['edge_count']} edges")
     return 0 if receipt["status"] == "passed" else 1
 
