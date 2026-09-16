@@ -1,6 +1,6 @@
 # Reading a G.R.A.F.T.+ pack
 
-Start with `AI-RECEIVER.md`. It gives the receiving AI a conservative read
+Start with `00-AI-READ-FIRST.md`. It gives the receiving AI a conservative read
 order, question patterns, evidence rules, and a required Proven / Inferred /
 Unknown / Next inspection answer discipline. Then use
 `graft-plus-receipt.json` to confirm the subject revision and

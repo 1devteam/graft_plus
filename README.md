@@ -35,7 +35,7 @@ pip install -e ".[dev]"
 graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
 ```
 
-Give the complete pack to the receiving AI; `AI-RECEIVER.md` tells it how to
+Give the complete pack to the receiving AI; `00-AI-READ-FIRST.md` tells it how to
 interpret the evidence without overstating what static reconstruction proves.
 See [docs/ARTIFACT.md](docs/ARTIFACT.md).
 
