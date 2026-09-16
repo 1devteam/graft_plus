@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Any
 
 TEST_EDGE_TYPES = frozenset({"tests", "tests_function"})
-TEST_NODE_TYPE = "test_module"
+TEST_NODE_TYPES = frozenset({"test_module", "test_file"})
 SEMANTIC_NODE_TYPES = frozenset(
     {
         "database_table",
@@ -68,7 +68,7 @@ def _production_edges(graph: dict[str, Any], nodes: dict[str, dict[str, Any]]) -
         source, target = str(edge["from"]), str(edge["to"])
         if str(edge["type"]) in TEST_EDGE_TYPES:
             continue
-        if nodes.get(source, {}).get("type") == TEST_NODE_TYPE or nodes.get(target, {}).get("type") == TEST_NODE_TYPE:
+        if nodes.get(source, {}).get("type") in TEST_NODE_TYPES or nodes.get(target, {}).get("type") in TEST_NODE_TYPES:
             continue
         edges.append(edge)
     return edges
@@ -144,7 +144,7 @@ def analyze_impact(graph: dict[str, Any], changed: list[str]) -> dict[str, Any]:
     source_index = _source_index(graph)
     changed_node_ids = sorted({node_id for path in changed for node_id in source_index.get(path, [])})
     unmapped = sorted(path for path in changed if path not in source_index)
-    changed_production = {node_id for node_id in changed_node_ids if nodes.get(node_id, {}).get("type") != TEST_NODE_TYPE}
+    changed_production = {node_id for node_id in changed_node_ids if nodes.get(node_id, {}).get("type") not in TEST_NODE_TYPES}
     production_edges = _production_edges(graph, nodes)
     upstream = _distances(changed_production, _adjacency(production_edges, reverse=True))
     downstream = _distances(changed_production, _adjacency(production_edges, reverse=False))

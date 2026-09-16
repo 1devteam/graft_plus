@@ -37,7 +37,8 @@ def _production_py(subject: Path) -> list[Path]:
         if _skip(path):
             continue
         rel = _rel(subject, path)
-        if rel.startswith("tests/") or "/fixtures/" in rel:
+        parts = set(Path(rel).parts)
+        if parts & {"tests", "test", "fixtures", "migrations", "alembic"}:
             continue
         files.append(path)
     return sorted(files)
@@ -326,19 +327,23 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
                     continue
                 add_route(last, path_lit, rel, module, item.name)
 
-    js_re = re.compile(r"\b(?:app|router|api)\.(get|post|put|patch|delete|all)\(\s*['\"]([^'\"]+)", re.I)
+    js_re = re.compile(
+        r"\b(?:app|router|api)\.(get|post|put|patch|delete|all)\(\s*['\"]([^'\"]+)['\"]\s*(?:,\s*([A-Za-z_$][\w$]*))?",
+        re.I,
+    )
     for path in subject.rglob("*"):
-        if _skip(path) or path.suffix not in {".js", ".ts", ".mjs"}:
+        if _skip(path) or path.suffix.lower() not in {".cjs", ".cts", ".js", ".jsx", ".mjs", ".mts", ".ts", ".tsx"}:
             continue
         rel = _rel(subject, path)
-        if rel.startswith("tests/") or "/node_modules/" in rel:
+        parts = set(Path(rel).parts)
+        if parts & {"tests", "test", "__tests__", "node_modules"} or re.search(r"\.(?:test|spec)\.[^.]+$", rel, re.I):
             continue
         try:
             text = path.read_text(encoding="utf-8")
         except OSError:
             continue
         for match in js_re.finditer(text):
-            add_route(match.group(1), match.group(2), rel, None)
+            add_route(match.group(1), match.group(2), rel, f"js:{rel}", match.group(3))
 
     declaration_sources: dict[tuple[str, str], set[str]] = defaultdict(set)
     for declaration in declarations:
@@ -374,7 +379,7 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
         if module:
             edges.append(
                 {
-                    "from": f"py:{module}",
+                    "from": module if str(module).startswith("js:") else f"py:{module}",
                     "to": route_id,
                     "type": "exposes_route",
                     "evidence": rel,
@@ -417,19 +422,18 @@ def collect_orm_tables(subject: Path) -> tuple[list[dict[str, Any]], list[dict[s
             if not table:
                 continue
             tid = f"db:table:{table}"
-            if tid in seen:
-                continue
-            seen.add(tid)
-            nodes.append(
-                {
-                    "id": tid,
-                    "type": "database_table",
-                    "label": table,
-                    "source": rel,
-                    "layer": "generated",
-                    "orm": "sqlalchemy" if not django else "django",
-                }
-            )
+            if tid not in seen:
+                seen.add(tid)
+                nodes.append(
+                    {
+                        "id": tid,
+                        "type": "database_table",
+                        "label": table,
+                        "source": rel,
+                        "layer": "generated",
+                        "orm": "sqlalchemy" if not django else "django",
+                    }
+                )
             edges.append(
                 {
                     "from": f"py:{module}",
@@ -503,7 +507,8 @@ def collect_contracts(subject: Path) -> tuple[list[dict[str, Any]], list[dict[st
         if _skip(path) or path.suffix not in {".ts", ".tsx"}:
             continue
         rel = _rel(subject, path)
-        if rel.startswith("node_modules/") or "/node_modules/" in rel:
+        parts = set(Path(rel).parts)
+        if parts & {"tests", "test", "__tests__", "node_modules"} or re.search(r"\.(?:test|spec)\.[^.]+$", rel, re.I):
             continue
         try:
             text = path.read_text(encoding="utf-8")
@@ -522,6 +527,15 @@ def collect_contracts(subject: Path) -> tuple[list[dict[str, Any]], list[dict[st
                     "kind": "typescript",
                 }
             )
+            edges.append(
+                {
+                    "from": f"js:{rel}",
+                    "to": cid,
+                    "type": "defines_contract",
+                    "evidence": rel,
+                    "layer": "generated",
+                }
+            )
     return nodes, edges
 
 
@@ -537,4 +551,3 @@ def collect_semantic(subject: Path) -> dict[str, Any]:
         "nodes": [*mig_nodes, *orm_nodes, *egress_nodes, *route_nodes, *contract_nodes],
         "edges": [*mig_edges, *orm_edges, *egress_edges, *route_edges, *contract_edges],
     }
-

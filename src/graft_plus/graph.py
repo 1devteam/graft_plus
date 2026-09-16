@@ -1,18 +1,20 @@
-"""Static inventory: Python, TypeScript, tests, overlay."""
+"""Build the canonical, source-backed G.R.A.F.T.+ graph."""
 
 from __future__ import annotations
 
 import ast
 import json
-import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-FRONTEND_IMPORT_RE = re.compile(r"(?:import|export)\s+(?:[^'\"]+?\s+from\s+)?['\"]([^'\"]+)['\"]")
-SKIP_DIRS = {".git", "node_modules", "dist", "build", ".venv", "venv", "__pycache__", ".tox", ".mypy_cache"}
+from graft_plus.adapters import collect_javascript_graph, collect_shell_graph
+from graft_plus.functions import collect_function_graph
+from graft_plus.graph_types import StaticEdge, StaticNode
+from graft_plus.inventory import collect_package_topology, inventory_nodes, relevant_files
 from graft_plus.runtime import is_runtime
+
+SKIP_DIRS = {".git", "node_modules", "dist", "build", ".venv", "venv", "__pycache__", ".tox", ".mypy_cache"}
 
 
 def _rel(subject: Path, path: Path) -> str:
@@ -29,41 +31,12 @@ def _package_root(specifier: str) -> str:
     return specifier.split(".")[0].split("/")[0]
 
 
-@dataclass(frozen=True, slots=True)
-class StaticNode:
-    id: str
-    type: str
-    source: str
-
-
-@dataclass(frozen=True, slots=True)
-class StaticEdge:
-    source: str
-    target: str
-    type: str
-    evidence: str
-
-
 def _skip(path: Path) -> bool:
     return any(part in SKIP_DIRS for part in path.parts)
 
 
 def discover_python_roots(subject: Path) -> list[Path]:
-    found: list[Path] = []
-    for name in ("src", "backend", "lib", "pkg"):
-        path = subject / name
-        if path.is_dir():
-            found.append(path)
-    skip_top = SKIP_DIRS | {"tests", "docs", "examples", "scripts", "migrations", "alembic"}
-    for child in sorted(subject.iterdir()):
-        if not child.is_dir() or child.name in skip_top or _skip(child):
-            continue
-        if (child / "__init__.py").exists() and child not in found:
-            found.append(child)
-    if found:
-        return found
-    py = [p for p in subject.glob("*.py") if p.name not in {"setup.py", "conftest.py"}]
-    return [subject] if py else []
+    return [subject] if any(path.is_file() and not _skip(path) for path in subject.rglob("*.py")) else []
 
 
 def discover_frontend_roots(subject: Path) -> list[Path]:
@@ -86,6 +59,10 @@ def _python_files(roots: list[Path], subject: Path) -> dict[Path, str]:
     for root in roots:
         for path in root.rglob("*.py"):
             if _skip(path):
+                continue
+            source = _rel(subject, path)
+            parts = set(Path(source).parts)
+            if parts & {"tests", "test", "fixtures", "migrations", "alembic"}:
                 continue
             files[path] = _module_for(subject, path)
     return files
@@ -158,17 +135,14 @@ def collect_python_graph(subject: Path, roots: list[Path]) -> tuple[list[StaticN
 
 
 def collect_test_graph(subject: Path, production_modules: set[str]) -> tuple[list[StaticNode], list[StaticEdge], list[dict[str, str]]]:
-    tests_root = subject / "tests"
-    if not tests_root.is_dir():
-        return [], [], []
     nodes: list[StaticNode] = []
     edges: set[StaticEdge] = set()
     unresolved: list[dict[str, str]] = []
-    for path in tests_root.rglob("*.py"):
-        rel_under_tests = path.relative_to(tests_root)
-        if _skip(path) or "fixtures" in rel_under_tests.parts:
-            continue
+    for path in subject.rglob("*.py"):
         rel = _rel(subject, path)
+        parts = Path(rel).parts
+        if _skip(path) or "fixtures" in parts or not ({"tests", "test"} & set(parts)):
+            continue
         node_id = f"test:{rel}"
         nodes.append(StaticNode(id=node_id, type="test_module", source=rel))
         try:
@@ -192,53 +166,9 @@ def collect_test_graph(subject: Path, production_modules: set[str]) -> tuple[lis
     return nodes, sorted(edges, key=lambda e: (e.source, e.target, e.type)), unresolved
 
 
-def _fe_id(subject: Path, path: Path) -> str:
-    return "fe:" + _rel(subject, path)
-
-
-def collect_frontend_graph(subject: Path, roots: list[Path]) -> tuple[list[StaticNode], list[StaticEdge], list[dict[str, str]]]:
-    files: set[Path] = set()
-    for root in roots:
-        files.update(p.resolve() for p in root.rglob("*") if p.suffix in {".ts", ".tsx"} and not _skip(p))
-    nodes = [
-        StaticNode(id=_fe_id(subject, path), type="frontend_module", source=_rel(subject, path))
-        for path in sorted(files)
-    ]
-    edges: set[StaticEdge] = set()
-    unresolved: list[dict[str, str]] = []
-    for path in files:
-        try:
-            text = path.read_text(encoding="utf-8")
-        except OSError:
-            continue
-        rel = _rel(subject, path)
-        for match in FRONTEND_IMPORT_RE.finditer(text):
-            spec = match.group(1)
-            if spec.startswith("."):
-                raw = (path.parent / spec).resolve()
-                candidates = [raw, raw.with_suffix(".ts"), raw.with_suffix(".tsx"), raw / "index.ts", raw / "index.tsx"]
-                target = next((c for c in candidates if c in files), None)
-                if target and target != path:
-                    edges.add(
-                        StaticEdge(
-                            source=_fe_id(subject, path),
-                            target=_fe_id(subject, target),
-                            type="imports",
-                            evidence=rel,
-                        )
-                    )
-                elif not target:
-                    unresolved.append({"specifier": spec, "from": rel})
-            elif not _runtime(spec):
-                unresolved.append({"specifier": spec, "from": rel})
-    return nodes, sorted(edges, key=lambda e: (e.source, e.target, e.type)), unresolved
-
-
 def collect_surfaces(subject: Path) -> list[StaticNode]:
     nodes: list[StaticNode] = []
-    for path in subject.rglob("*"):
-        if not path.is_file() or _skip(path):
-            continue
+    for path in relevant_files(subject):
         rel = _rel(subject, path)
         name = path.name
         if rel.startswith(".github/workflows/") and name.endswith((".yml", ".yaml")):
@@ -311,6 +241,9 @@ def _metrics(node_ids: list[str], edges: list[dict[str, Any]]) -> dict[str, Any]
         "edge_counts_by_type": dict(sorted(types.items())),
         "top_fan_in": ranked(fan_in),
         "top_fan_out": ranked(fan_out),
+        "top_production_fan_in": [
+            item for item in ranked(fan_in) if not str(item["node"]).startswith("test:")
+        ],
         "static_cycles": _tarjan(node_ids, pairs),
     }
 
@@ -327,11 +260,12 @@ def load_overlay(path: Path | None) -> dict[str, Any]:
 def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str, Any]:
     subject = subject.resolve()
     py_roots = discover_python_roots(subject)
-    fe_roots = discover_frontend_roots(subject)
     py_nodes, py_edges, py_unresolved = collect_python_graph(subject, py_roots)
-    fe_nodes, fe_edges, fe_unresolved = collect_frontend_graph(subject, fe_roots)
     production = {n.id[3:] for n in py_nodes}
     test_nodes, test_edges, test_unresolved = collect_test_graph(subject, production)
+    js_nodes, js_edges, js_unresolved = collect_javascript_graph(subject)
+    python_by_source = {node.source: node.id for node in py_nodes}
+    shell_nodes, shell_edges, shell_unresolved = collect_shell_graph(subject, python_by_source)
     surfaces = collect_surfaces(subject)
     overlay = load_overlay(overlay_path)
     from graft_plus.semantic import collect_semantic
@@ -340,30 +274,89 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
 
     nodes: list[dict[str, Any]] = [
         {"id": n.id, "type": n.type, "source": n.source, "layer": "generated"}
-        for n in [*py_nodes, *fe_nodes, *test_nodes, *surfaces]
+        for n in [*py_nodes, *test_nodes, *js_nodes, *shell_nodes, *surfaces]
     ]
     nodes.extend(semantic["nodes"])
+    function_nodes, function_edges = collect_function_graph(subject, overlay, python_by_source)
+    nodes.extend(function_nodes)
     for item in overlay.get("nodes") or []:
         node = dict(item)
         node.setdefault("layer", "overlay")
         nodes.append(node)
     edges: list[dict[str, Any]] = [
         {"from": e.source, "to": e.target, "type": e.type, "evidence": e.evidence, "layer": "generated"}
-        for e in [*py_edges, *fe_edges, *test_edges]
+        for e in [*py_edges, *test_edges, *js_edges, *shell_edges]
     ]
     edges.extend(e for e in semantic["edges"] if e.get("from") and e.get("to"))
+    edges.extend(function_edges)
     for item in overlay.get("edges") or []:
         edge = dict(item)
         edge.setdefault("layer", "overlay")
         edges.append(edge)
 
-    unresolved = _dedupe_unresolved([*py_unresolved, *fe_unresolved, *test_unresolved])
+    source_node_ids = {
+        node.source: node.id
+        for node in [*py_nodes, *test_nodes, *js_nodes, *shell_nodes, *surfaces]
+    }
+    package_nodes, package_edges = collect_package_topology(subject, source_node_ids)
+    nodes.extend(package_nodes)
+    edges.extend(package_edges)
+    mapped_sources = {
+        str(node["source"])
+        for node in nodes
+        if isinstance(node.get("source"), str) and node.get("source")
+    }
+    fallback_nodes, inventory_facts = inventory_nodes(subject, mapped_sources=mapped_sources)
+    nodes.extend(fallback_nodes)
+
+    unresolved = _dedupe_unresolved(
+        [*py_unresolved, *test_unresolved, *js_unresolved, *shell_unresolved]
+    )
+    dependency_ids = {
+        str(node.get("name")): str(node["id"])
+        for node in package_nodes
+        if node.get("type") == "external_dependency" and node.get("name")
+    }
+    declared_external_imports: list[dict[str, str]] = []
+    still_unresolved: list[dict[str, str]] = []
+    for row in unresolved:
+        package_name = _package_root(row["specifier"])
+        target = dependency_ids.get(package_name)
+        source_id = source_node_ids.get(row["from"])
+        if target and source_id:
+            edges.append(
+                {
+                    "from": source_id,
+                    "to": target,
+                    "type": "imports_package",
+                    "evidence": row["from"],
+                    "layer": "generated",
+                }
+            )
+            declared_external_imports.append({**row, "package": package_name})
+        else:
+            still_unresolved.append(row)
+    unresolved = still_unresolved
     ids = [str(n["id"]) for n in nodes]
     dupes = sorted(i for i, c in Counter(ids).items() if c > 1)
     if dupes:
         raise ValueError(f"duplicate nodes: {', '.join(dupes)}")
     known = set(ids)
-    edges = [e for e in edges if str(e.get("from")) in known and str(e.get("to")) in known]
+    missing = sorted(
+        {
+            str(endpoint)
+            for edge in edges
+            for endpoint in (edge.get("from"), edge.get("to"))
+            if str(endpoint) not in known
+        }
+    )
+    if missing:
+        raise ValueError(f"undefined edge endpoints: {', '.join(missing)}")
+    edge_by_key: dict[str, dict[str, Any]] = {}
+    for edge in edges:
+        key = json.dumps(edge, sort_keys=True, separators=(",", ":"))
+        edge_by_key[key] = edge
+    edges = list(edge_by_key.values())
     node_ids = sorted(known)
     overlay_rel = None
     if overlay_path and overlay_path.exists():
@@ -373,7 +366,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             overlay_rel = str(overlay_path)
     overlay_count = sum(1 for n in nodes if n.get("layer") == "overlay")
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.3",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -381,7 +374,8 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "grants_execution_authority": False,
         "generated_from": {
             "python_roots": [str(p.relative_to(subject)) if p != subject else "." for p in py_roots],
-            "frontend_roots": [str(p.relative_to(subject)) for p in fe_roots],
+            "adapters": ["python", "javascript-typescript", "shell-bats", "package-manifests"],
+            "function_roots": overlay.get("function_roots") or [],
             "overlay": overlay_rel,
         },
         "nodes": sorted(nodes, key=lambda n: str(n["id"])),
@@ -390,12 +384,17 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "facts": {
             "unresolved_imports": unresolved,
             "unresolved_package_roots": sorted({_package_root(row["specifier"]) for row in unresolved}),
+            "declared_external_imports": declared_external_imports,
+            **inventory_facts,
         },
         "metrics": {
             **_metrics(node_ids, edges),
             "overlay_node_count": overlay_count,
             "unresolved_import_count": len(unresolved),
             "surface_count": len(surfaces),
+            "inventory_file_count": inventory_facts["file_count"],
+            "relationship_parsed_file_count": inventory_facts["relationship_parsed_file_count"],
+            "relationship_unparsed_file_count": inventory_facts["relationship_unparsed_file_count"],
         },
     }
 
