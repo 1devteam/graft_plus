@@ -15,6 +15,17 @@ def _sha(payload: dict[str, Any]) -> str:
 
 def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[str, Any]) -> dict[str, Any]:
     blocking = list(completeness.get("unacknowledged_blocking_findings") or [])
+    residuals = completeness.get("residuals") or {}
+    review = []
+    if impact.get("unmapped_changed_file_count"):
+        review.append("unmapped_changed_files")
+    if residuals.get("overlay") == "residual":
+        review.append("overlay_residual")
+    warnings = []
+    if residuals.get("no_git_range"):
+        warnings.append("no_git_range")
+    if residuals.get("unresolved_package_roots"):
+        warnings.append("unresolved_imports")
     if not completeness.get("integrity_pass") or blocking:
         disposition = "blocked"
     elif impact.get("unmapped_changed_file_count"):
@@ -22,7 +33,7 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
     else:
         disposition = "clear"
     return {
-        "schema_version": "1.0",
+        "schema_version": "1.1",
         "product": PRODUCT,
         "package": PACKAGE,
         "role": "fact-substrate",
@@ -31,8 +42,8 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
             "merge_authorization": MERGE_AUTHORIZATION,
             "full_ci_required": True,
             "blocking_reasons": blocking + (["undefined_edge_endpoints"] if not completeness.get("integrity_pass") else []),
-            "review_reasons": ["unmapped_changed_files"] if impact.get("unmapped_changed_file_count") else [],
-            "warnings": [],
+            "review_reasons": review,
+            "warnings": warnings,
         },
         "grants_execution_authority": GRANTS_EXECUTION_AUTHORITY,
         "implementsPlan": IMPLEMENTS_PLAN,
@@ -41,6 +52,7 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
             "undefined_edge_endpoints": completeness.get("undefined_edge_endpoints") or [],
             "unacknowledged_blocking_findings": blocking,
         },
+        "residuals": residuals,
         "impact": {
             "changed_files": impact.get("changed_files") or [],
             "changed_node_ids": [n["id"] for n in impact.get("changed_nodes") or []],
@@ -56,5 +68,7 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
             "merge_authorization is not-determined even when disposition is clear.",
             "An acknowledgement is not a repair.",
             "Do not invent missing nodes.",
+            "Unresolved imports are facts, not missing files.",
+            "Overlay stays residual until a reviewed relationship is attached.",
         ],
     }

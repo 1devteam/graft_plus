@@ -48,6 +48,7 @@ def test_frozen_negatives_cannot_grant_authority():
     assert decision["decision"]["merge_authorization"] == "not-determined"
     assert decision["grants_execution_authority"] is False
 
+
 def test_artifact_is_reconstruction_not_source_dump(tmp_path):
     out = tmp_path / "pack"
     assert reconstruct(FIXTURE, out, None, None, None) == 0
@@ -88,3 +89,29 @@ def test_cli_writes_proof_manifest(tmp_path):
     assert "graph-proof-manifest.json" in names
     assert "graph-architecture-decision.json" in names
     assert "GRAFT-MAP.md" not in names
+
+
+def test_unresolved_and_surfaces_are_named(tmp_path):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "main.py").write_text("import requests\nfrom app import util\n")
+    (tmp_path / "app" / "util.py").write_text("VALUE = 1\n")
+    (tmp_path / ".github" / "workflows").mkdir(parents=True)
+    (tmp_path / ".github" / "workflows" / "ci.yml").write_text("name: ci\n")
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='app'\n")
+    graph = build_graph(subject=tmp_path)
+    ids = {n["id"] for n in graph["nodes"]}
+    assert "py:app.main" in ids
+    assert "py:app.util" in ids
+    assert "ci:.github/workflows/ci.yml" in ids
+    assert "manifest:pyproject.toml" in ids
+    assert all(n.get("layer") == "generated" for n in graph["nodes"])
+    specs = {row["specifier"] for row in graph["facts"]["unresolved_imports"]}
+    assert "requests" in specs
+    completeness = audit(graph)
+    assert completeness["residuals"]["overlay"] == "residual"
+    assert "requests" in completeness["residuals"]["unresolved_package_roots"]
+    decision = decide(graph=graph, impact={"changed_files": []}, completeness=completeness)
+    assert decision["decision"]["merge_authorization"] == "not-determined"
+    assert "overlay_residual" in decision["decision"]["review_reasons"]
+    assert "unresolved_imports" in decision["decision"]["warnings"]
