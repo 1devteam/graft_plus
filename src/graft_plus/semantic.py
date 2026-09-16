@@ -324,11 +324,96 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
     return nodes, edges
 
 
+_CONTRACT_BASES = frozenset({"BaseModel", "Protocol", "TypedDict", "Enum"})
+_TS_INTERFACE_RE = re.compile(r"export\s+(?:interface|type)\s+([A-Za-z_][A-Za-z0-9_]*)")
+
+
+def collect_contracts(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    for path in _production_py(subject):
+        rel = _rel(subject, path)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=rel)
+        except (OSError, SyntaxError):
+            continue
+        module = _module_for_path(subject, path)
+        for item in tree.body:
+            is_dataclass = any(
+                (isinstance(d, ast.Name) and d.id == "dataclass")
+                or (isinstance(d, ast.Call) and isinstance(d.func, ast.Name) and d.func.id == "dataclass")
+                for d in getattr(item, "decorator_list", [])
+            )
+            bases: list[str] = []
+            if isinstance(item, ast.ClassDef):
+                for base in item.bases:
+                    name = _call_name(base) if not isinstance(base, ast.Name) else base.id
+                    if isinstance(base, ast.Attribute):
+                        name = base.attr
+                    elif isinstance(base, ast.Name):
+                        name = base.id
+                    else:
+                        name = None
+                    if name:
+                        bases.append(name)
+            if not isinstance(item, ast.ClassDef):
+                continue
+            if not is_dataclass and not (set(bases) & _CONTRACT_BASES):
+                continue
+            cid = f"contract:{module}:{item.name}"
+            nodes.append(
+                {
+                    "id": cid,
+                    "type": "contract",
+                    "source": rel,
+                    "layer": "generated",
+                    "name": item.name,
+                    "bases": bases,
+                    "kind": "dataclass" if is_dataclass else "model",
+                }
+            )
+            edges.append(
+                {
+                    "from": f"py:{module}",
+                    "to": cid,
+                    "type": "defines_contract",
+                    "evidence": rel,
+                    "layer": "generated",
+                }
+            )
+    for path in subject.rglob("*"):
+        if _skip(path) or path.suffix not in {".ts", ".tsx"}:
+            continue
+        rel = _rel(subject, path)
+        if rel.startswith("node_modules/") or "/node_modules/" in rel:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for match in _TS_INTERFACE_RE.finditer(text):
+            name = match.group(1)
+            cid = f"contract:{rel}:{name}"
+            nodes.append(
+                {
+                    "id": cid,
+                    "type": "contract",
+                    "source": rel,
+                    "layer": "generated",
+                    "name": name,
+                    "kind": "typescript",
+                }
+            )
+    return nodes, edges
+
+
 def collect_semantic(subject: Path) -> dict[str, Any]:
     mig_nodes, mig_edges = collect_migrations(subject)
     egress_nodes, egress_edges = collect_egress(subject)
     route_nodes, route_edges = collect_routes(subject)
+    contract_nodes, contract_edges = collect_contracts(subject)
     return {
-        "nodes": [*mig_nodes, *egress_nodes, *route_nodes],
-        "edges": [*mig_edges, *egress_edges, *route_edges],
+        "nodes": [*mig_nodes, *egress_nodes, *route_nodes, *contract_nodes],
+        "edges": [*mig_edges, *egress_edges, *route_edges, *contract_edges],
     }
+

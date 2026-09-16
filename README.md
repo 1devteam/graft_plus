@@ -1,8 +1,8 @@
 # G.R.A.F.T.+ (`graft_plus`)
 
-Reconstruction method extracted from a proven Ajenda pipeline. Project-agnostic. No Ajenda domain logic.
+The graph pipeline copied as-is from [1devteam/ajenda-ai](https://github.com/1devteam/ajenda-ai) `@501d5c95` `scripts/validation/`.
 
-Point it at an existing public repository. It writes a pack an AI can read. 1devteam.com hosts that pack. It does not dump source.
+Ajenda-specific catalogs, overlays, and proof bundles are still in those files. Extract them later. Do not rewrite the scripts in place.
 
 ```text
 product: G.R.A.F.T.+
@@ -18,8 +18,9 @@ grants_execution_authority: false
 ```bash
 pip install -e ".[dev]"
 graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
+graft-plus reconstruct --subject /path/to/repo --out artifacts/graft-pack
 ```
 
 Decipher `graph-architecture-decision.json` first.
 
-See [docs/ARTIFACT.md](docs/ARTIFACT.md).
+Copied scripts live in `src/graft_plus/ajenda_graph/`. Provenance: `src/graft_plus/ajenda_graph/SOURCE.txt`. Ajenda overlay example: `examples/ajenda/`.

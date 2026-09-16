@@ -21,7 +21,11 @@ graft-plus = "graft_plus.cli:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+graft_plus = ["ajenda_graph/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
 norecursedirs = ["tests/fixtures"]
+

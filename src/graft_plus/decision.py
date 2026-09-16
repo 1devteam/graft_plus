@@ -13,14 +13,26 @@ def _sha(payload: dict[str, Any]) -> str:
     return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
+def _ids(items: list[Any]) -> list[str]:
+    out = []
+    for item in items or []:
+        if isinstance(item, str) and item:
+            out.append(item)
+        elif isinstance(item, dict) and item.get("id"):
+            out.append(str(item["id"]))
+    return sorted(set(out))
+
+
 def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[str, Any]) -> dict[str, Any]:
     blocking = list((completeness.get("integrity") or {}).get("unacknowledged_blocking_findings") or completeness.get("unacknowledged_blocking_findings") or [])
     residuals = completeness.get("residuals") or {}
     review = []
     if impact.get("unmapped_changed_file_count"):
         review.append("unmapped_changed_files")
-    if residuals.get("overlay") == "residual":
-        review.append("overlay_residual")
+    if residuals.get("unmapped_source_files"):
+        review.append("unmapped_source_files")
+    if residuals.get("stale_graph_sources"):
+        review.append("stale_graph_sources")
     if (completeness.get("integrity") or {}).get("known_violations"):
         review.append("known_violations_visible")
     warnings = []
@@ -54,13 +66,23 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
             "integrity_pass": completeness.get("integrity_pass"),
             "undefined_edge_endpoints": completeness.get("undefined_edge_endpoints") or [],
             "unacknowledged_blocking_findings": blocking,
+            "acknowledged_semantic_findings": completeness.get("acknowledged_findings") or [],
+            "missing_semantic_edge_evidence": (completeness.get("integrity") or {}).get("missing_semantic_edge_evidence") or [],
+            "semantic_reconciliation_counts": completeness.get("semantic_reconciliation_counts") or {},
+            "unmapped_source_files": residuals.get("unmapped_source_files") or [],
+            "stale_graph_sources": residuals.get("stale_graph_sources") or [],
         },
         "residuals": residuals,
         "impact": {
             "changed_files": impact.get("changed_files") or [],
-            "changed_node_ids": [n["id"] for n in impact.get("changed_nodes") or []],
+            "changed_node_ids": _ids(impact.get("changed_nodes") or []),
             "unmapped_changed_files": impact.get("unmapped_changed_files") or [],
+            "upstream_consumers": _ids(impact.get("upstream_consumers") or []),
+            "downstream_dependencies": _ids(impact.get("downstream_dependencies") or []),
+            "affected_semantic_node_ids": _ids(impact.get("affected_semantic_nodes") or []),
+            "dependency_semantic_node_ids": _ids(impact.get("dependency_semantic_nodes") or []),
             "impacted_tests": impact.get("impacted_tests") or [],
+            "relevant_invariant_ids": _ids(impact.get("relevant_invariants") or []),
         },
         "inputs": {
             "canonical_graph_sha256": _sha(graph),

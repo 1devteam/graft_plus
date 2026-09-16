@@ -1,49 +1,54 @@
-"""Completeness audit with ratchet. Ported from ajenda-ai graph_completeness_audit.py.
-
-An acknowledgement means the detector already knows the finding.
-It is not a repair. New unacknowledged blocking findings fail closed.
-"""
+#!/usr/bin/env python3
+"""Audit Ajenda's canonical dependency graph for completeness and semantic integrity."""
 
 from __future__ import annotations
 
+import argparse
+import json
+import sys
 from collections import Counter, defaultdict, deque
 from pathlib import Path
 from typing import Any
 
-from graft_plus.coverage import inventory as coverage_inventory
+from build_dependency_graph import REPO_ROOT, build_graph
 
-TEST_EDGE_TYPES = frozenset({"tests", "tests_function"})
+TEST_EDGE_TYPE = "tests"
 STATIC_EDGE_TYPE = "imports"
 SOURCE_NODE_PREFIXES = ("py:", "fe:")
 
-TYPE_BOUNDARY = {
-    "runtime": "runtime",
-    "security_boundary": "security-boundary",
-    "external_service": "external",
-    "frontend_module": "frontend",
-    "test_module": "tests",
-    "database_table": "database",
-    "migration": "database-migration",
-    "network_egress_sink": "external-egress",
-    "http_route": "http-route",
-    "contract": "contract",
-    "state_resource": "state-authority",
-    "ci_workflow": "ci",
-    "docker": "docker",
-    "manifest": "manifest",
-    "python_module": None,
-}
-
 
 def architectural_boundary(node: dict[str, Any]) -> str:
-    node_type = str(node.get("type") or "")
-    mapped = TYPE_BOUNDARY.get(node_type)
-    if mapped:
-        return mapped
+    node_type = str(node.get("type", ""))
+    explicit = {
+        "runtime": "runtime",
+        "security_boundary": "security-boundary",
+        "external_service": "external",
+        "frontend_module": "frontend",
+        "test_module": "tests",
+        "database_table": "database",
+        "migration": "database-migration",
+        "network_egress_sink": "external-egress",
+        "state_resource": "state-authority",
+    }
+    if node_type in explicit:
+        return explicit[node_type]
+
     source = str(node.get("source") or "").replace("\\", "/")
     parts = [part for part in source.split("/") if part]
     if not parts:
         return "source:unknown"
+    if parts[0] == "backend":
+        if len(parts) == 2:
+            return "backend:root"
+        if len(parts) >= 4 and parts[1] == "services" and parts[2] in {"credentials", "tools"}:
+            return f"backend:services:{parts[2]}"
+        if len(parts) >= 3 and parts[1] == "services":
+            return "backend:services"
+        return f"backend:{parts[1]}"
+    if parts[0] == "services":
+        return f"standalone:{parts[1]}" if len(parts) >= 2 else "standalone:root"
+    if parts[0] == "frontend":
+        return "frontend"
     return f"source:{parts[0]}"
 
 
@@ -55,13 +60,16 @@ def _production_edges(graph: dict[str, Any], nodes: dict[str, dict[str, Any]]) -
     return [
         edge
         for edge in graph["edges"]
-        if str(edge.get("type")) not in TEST_EDGE_TYPES
-        and str(edge.get("from")) in nodes
-        and str(edge.get("to")) in nodes
+        if str(edge.get("type")) != TEST_EDGE_TYPE and str(edge.get("from")) in nodes and str(edge.get("to")) in nodes
     ]
 
 
-def _adjacency(node_ids: list[str], edges: list[dict[str, Any]], *, reverse: bool = False) -> dict[str, set[str]]:
+def _adjacency(
+    node_ids: list[str],
+    edges: list[dict[str, Any]],
+    *,
+    reverse: bool = False,
+) -> dict[str, set[str]]:
     adjacency = {node_id: set() for node_id in node_ids}
     for edge in edges:
         source, target = str(edge["from"]), str(edge["to"])
@@ -80,7 +88,7 @@ def _reachable(start: str, adjacency: dict[str, set[str]]) -> set[str]:
             if target not in visited:
                 visited.add(target)
                 queue.append(target)
-    visited.discard(start)
+    visited.remove(start)
     return visited
 
 
@@ -88,7 +96,7 @@ def _betweenness(node_ids: list[str], adjacency: dict[str, set[str]]) -> dict[st
     centrality = {node_id: 0.0 for node_id in node_ids}
     for source in node_ids:
         stack: list[str] = []
-        predecessors: dict[str, list[str]] = {node_id: [] for node_id in node_ids}
+        predecessors = {node_id: [] for node_id in node_ids}
         shortest_path_count = {node_id: 0.0 for node_id in node_ids}
         shortest_path_count[source] = 1.0
         distance = {node_id: -1 for node_id in node_ids}
@@ -126,7 +134,7 @@ def _node_metrics(nodes: dict[str, dict[str, Any]], edges: list[dict[str, Any]])
     betweenness = _betweenness(node_ids, forward)
     direct_consumers = Counter(str(edge["to"]) for edge in edges)
     direct_dependencies = Counter(str(edge["from"]) for edge in edges)
-    semantic_incident: Counter[str] = Counter()
+    semantic_incident = Counter()
     for edge in edges:
         if str(edge["type"]) != STATIC_EDGE_TYPE:
             semantic_incident[str(edge["from"])] += 1
@@ -165,8 +173,8 @@ def _boundary_matrix(nodes: dict[str, dict[str, Any]], edges: list[dict[str, Any
 
 
 def _classify_cycles(graph: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    result = []
-    for cycle in graph.get("metrics", {}).get("static_cycles") or []:
+    result: list[dict[str, Any]] = []
+    for cycle in graph.get("metrics", {}).get("static_cycles", []):
         members = [str(node_id) for node_id in cycle if str(node_id) in nodes]
         boundaries = sorted({architectural_boundary(nodes[node_id]) for node_id in members})
         result.append(
@@ -179,10 +187,13 @@ def _classify_cycles(graph: dict[str, Any], nodes: dict[str, dict[str, Any]]) ->
     return result
 
 
-def _semantic_reconciliation(nodes: dict[str, dict[str, Any]], edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _semantic_reconciliation(
+    nodes: dict[str, dict[str, Any]],
+    edges: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
     static_edges = [edge for edge in edges if str(edge["type"]) == STATIC_EDGE_TYPE]
     static_adjacency = _adjacency(sorted(nodes), static_edges)
-    reconciled = []
+    reconciled: list[dict[str, Any]] = []
     for edge in edges:
         edge_type = str(edge["type"])
         if edge_type == STATIC_EDGE_TYPE:
@@ -191,7 +202,9 @@ def _semantic_reconciliation(nodes: dict[str, dict[str, Any]], edges: list[dict[
         source_backed = source.startswith(SOURCE_NODE_PREFIXES)
         target_backed = target.startswith(SOURCE_NODE_PREFIXES)
         if source_backed and target_backed:
-            classification = "static-corroborated" if target in _reachable(source, static_adjacency) else "semantic-only"
+            classification = (
+                "static-corroborated" if target in _reachable(source, static_adjacency) else "semantic-only"
+            )
         else:
             classification = "boundary-or-external"
         reconciled.append(
@@ -203,111 +216,114 @@ def _semantic_reconciliation(nodes: dict[str, dict[str, Any]], edges: list[dict[
                 "classification": classification,
             }
         )
-    return sorted(reconciled, key=lambda item: (str(item["classification"]), str(item["from"]), str(item["to"]), str(item["type"])))
-
-
-def _collect_findings(graph: dict[str, Any], overlay: dict[str, Any]) -> list[dict[str, Any]]:
-    findings = [dict(item) for item in (graph.get("semantic_findings") or [])]
-    seen = {str(item.get("id")) for item in findings if item.get("id")}
-    acknowledged = {str(x) for x in (overlay.get("acknowledged_findings") or [])}
-    for item in overlay.get("findings") or []:
-        fid = str(item.get("id") or "")
-        if not fid or fid in seen:
-            continue
-        row = dict(item)
-        row["id"] = fid
-        findings.append(row)
-        seen.add(fid)
-    for item in findings:
-        fid = str(item.get("id") or "")
-        item["acknowledged"] = bool(item.get("acknowledged")) or fid in acknowledged
-    return findings
-
-
-def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: dict[str, Any] | None = None, subject: Path | None = None) -> dict[str, Any]:
-    overlay = overlay or {}
-    impact = impact or {}
-    known = {str(n["id"]) for n in graph["nodes"]}
-    missing_endpoints = sorted(
-        {
-            str(end)
-            for edge in graph["edges"]
-            for end in (edge.get("from"), edge.get("to"))
-            if end not in known
-        }
+    return sorted(
+        reconciled,
+        key=lambda item: (str(item["classification"]), str(item["from"]), str(item["to"]), str(item["type"])),
     )
+
+
+def _missing_evidence(graph: dict[str, Any]) -> tuple[list[str], list[str]]:
+    missing_edge_evidence: set[str] = set()
+    missing_invariant_sources: set[str] = set()
+    for edge in graph.get("edges", []):
+        if str(edge.get("type")) in {STATIC_EDGE_TYPE, TEST_EDGE_TYPE}:
+            continue
+        evidence = edge.get("evidence")
+        if not isinstance(evidence, str) or not evidence:
+            missing_edge_evidence.add(f"{edge.get('from')}->{edge.get('to')}:{edge.get('type')}:<missing>")
+        elif not (REPO_ROOT / evidence).exists():
+            missing_edge_evidence.add(evidence)
+    for invariant in graph.get("invariants", []):
+        for source in invariant.get("sources", []):
+            if isinstance(source, str) and source and not (REPO_ROOT / source).exists():
+                missing_invariant_sources.add(source)
+    return sorted(missing_edge_evidence), sorted(missing_invariant_sources)
+
+
+def audit_graph(graph: dict[str, Any]) -> dict[str, Any]:
     nodes = _production_nodes(graph)
     edges = _production_edges(graph, nodes)
-    metrics = _node_metrics(nodes, edges) if nodes else []
-    boundary_matrix = _boundary_matrix(nodes, edges) if nodes else []
-    reconciliation = _semantic_reconciliation(nodes, edges) if nodes else []
+    metrics = _node_metrics(nodes, edges)
+    boundary_matrix = _boundary_matrix(nodes, edges)
+    reconciliation = _semantic_reconciliation(nodes, edges)
     cycles = _classify_cycles(graph, nodes)
-    findings = _collect_findings(graph, overlay)
+    missing_edge_evidence, missing_invariant_sources = _missing_evidence(graph)
+    findings = [dict(item) for item in graph.get("semantic_findings", [])]
     unacknowledged_blocking = sorted(
-        str(item["id"]) for item in findings if bool(item.get("blocking")) and not bool(item.get("acknowledged")) and item.get("id")
+        str(item["id"]) for item in findings if bool(item.get("blocking")) and not bool(item.get("acknowledged"))
     )
-    acknowledged = sorted(str(item["id"]) for item in findings if bool(item.get("acknowledged")) and item.get("id"))
-    known_violations = sorted(str(item["id"]) for item in findings if str(item.get("classification") or "") == "known_violation")
-    missing_edge_evidence = []
-    if subject is not None:
-        for edge in graph.get("edges") or []:
-            if str(edge.get("type")) in {STATIC_EDGE_TYPE, *TEST_EDGE_TYPES}:
-                continue
-            evidence = edge.get("evidence")
-            if not isinstance(evidence, str) or not evidence:
-                missing_edge_evidence.append(f"{edge.get('from')}->{edge.get('to')}:{edge.get('type')}")
-            elif not (subject / evidence).exists():
-                missing_edge_evidence.append(evidence)
-    integrity_pass = not missing_endpoints and not unacknowledged_blocking and not missing_edge_evidence
-    overlay_nodes = [n for n in graph["nodes"] if n.get("layer") == "overlay"]
-    unresolved = list((graph.get("facts") or {}).get("unresolved_imports") or [])
-    coverage = coverage_inventory(subject, graph) if subject is not None else {
-        "unmapped_source_files": [],
-        "stale_graph_sources": [],
-        "unmapped_source_file_count": 0,
-        "stale_graph_source_count": 0,
-    }
-    residuals = {
-        "overlay": "attached" if overlay_nodes else "residual",
-        "unresolved_imports": unresolved,
-        "unresolved_package_roots": list((graph.get("facts") or {}).get("unresolved_package_roots") or []),
-        "no_git_range": not bool(impact.get("changed_files")),
-        "unmapped_changed_files": list(impact.get("unmapped_changed_files") or []),
-        "unmapped_source_files": coverage.get("unmapped_source_files") or [],
-        "stale_graph_sources": coverage.get("stale_graph_sources") or [],
-        "known_violations": known_violations,
-        "unacknowledged_blocking_findings": unacknowledged_blocking,
-        "note": "Residuals stay visible. An acknowledgement is not a repair. Overlay stays residual until a reviewed relationship is attached.",
-    }
+    acknowledged = sorted(str(item["id"]) for item in findings if bool(item.get("acknowledged")))
+    finding_counts = Counter(str(item.get("category") or "unknown") for item in findings)
+    reconciliation_counts = Counter(str(item["classification"]) for item in reconciliation)
+    boundary_counts = Counter(architectural_boundary(node) for node in nodes.values())
+    cross_boundary_edge_count = sum(int(item["count"]) for item in boundary_matrix if item["cross_boundary"])
+    integrity_pass = not missing_edge_evidence and not missing_invariant_sources and not unacknowledged_blocking
+
     return {
-        "schema_version": "1.2",
-        "integrity_pass": integrity_pass,
-        "undefined_edge_endpoints": missing_endpoints,
+        "schema_version": "1.1",
         "production_node_count": len(nodes),
         "production_edge_count": len(edges),
-        "node_count": graph.get("metrics", {}).get("node_count", len(graph.get("nodes", []))),
-        "edge_count": graph.get("metrics", {}).get("edge_count", len(graph.get("edges", []))),
-        "boundary_counts": dict(sorted(Counter(architectural_boundary(node) for node in nodes.values()).items())),
-        "cross_boundary_edge_count": sum(int(item["count"]) for item in boundary_matrix if item["cross_boundary"]),
+        "boundary_counts": dict(sorted(boundary_counts.items())),
+        "cross_boundary_edge_count": cross_boundary_edge_count,
+        "node_metrics": metrics,
         "top_betweenness": sorted(metrics, key=lambda item: (-float(item["betweenness"]), str(item["id"])))[:25],
-        "top_transitive_consumers": sorted(metrics, key=lambda item: (-int(item["transitive_consumers"]), str(item["id"])))[:25],
+        "top_transitive_consumers": sorted(
+            metrics,
+            key=lambda item: (-int(item["transitive_consumers"]), str(item["id"])),
+        )[:25],
         "boundary_matrix": boundary_matrix,
         "static_cycles": cycles,
-        "static_cycle_count": len(cycles),
-        "semantic_reconciliation_counts": dict(sorted(Counter(str(item["classification"]) for item in reconciliation).items())),
+        "semantic_reconciliation": reconciliation,
+        "semantic_reconciliation_counts": dict(sorted(reconciliation_counts.items())),
         "semantic_findings": findings,
-        "unacknowledged_blocking_findings": unacknowledged_blocking,
-        "acknowledged_findings": acknowledged,
+        "semantic_finding_counts": dict(sorted(finding_counts.items())),
         "integrity": {
-            "missing_semantic_edge_evidence": sorted(set(missing_edge_evidence)),
+            "missing_semantic_edge_evidence": missing_edge_evidence,
+            "missing_invariant_sources": missing_invariant_sources,
             "unacknowledged_blocking_findings": unacknowledged_blocking,
             "acknowledged_semantic_findings": acknowledged,
-            "known_violations": known_violations,
             "semantic_finding_count": len(findings),
-            "unmapped_source_file_count": coverage.get("unmapped_source_file_count", 0),
-            "stale_graph_source_count": coverage.get("stale_graph_source_count", 0),
             "pass": integrity_pass,
         },
-        "residuals": residuals,
-        "note": "An acknowledgement means the detector already knows the finding. It is not a repair.",
     }
+
+
+def _print_human(report: dict[str, Any]) -> None:
+    print(
+        "Graph completeness: "
+        f"{report['production_node_count']} production node(s), "
+        f"{report['production_edge_count']} production edge(s), "
+        f"{report['cross_boundary_edge_count']} cross-boundary edge(s)"
+    )
+    print("Semantic reconciliation:")
+    for key, value in report["semantic_reconciliation_counts"].items():
+        print(f"  {key}: {value}")
+    print(f"Static cycles: {len(report['static_cycles'])}")
+    print(f"Semantic findings: {report['integrity']['semantic_finding_count']}")
+    if report["integrity"]["unacknowledged_blocking_findings"]:
+        print("Unacknowledged blocking findings:")
+        for finding_id in report["integrity"]["unacknowledged_blocking_findings"]:
+            print(f"  {finding_id}")
+    print(f"Integrity: {'PASS' if report['integrity']['pass'] else 'FAIL'}")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Audit Ajenda's canonical dependency graph completeness")
+    parser.add_argument("--output")
+    parser.add_argument("--json", action="store_true", dest="as_json")
+    args = parser.parse_args()
+    report = audit_graph(build_graph())
+    rendered = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    if args.output:
+        output = Path(args.output)
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_text(rendered, encoding="utf-8")
+    if args.as_json:
+        print(rendered, end="")
+    else:
+        _print_human(report)
+    return 0 if report["integrity"]["pass"] else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

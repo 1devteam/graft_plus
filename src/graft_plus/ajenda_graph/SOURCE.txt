@@ -1,0 +1,7 @@
+Copied as-is from 1devteam/ajenda-ai
+SHA: 501d5c955de6cc8b87f851e31f8739d72915eca0
+Path: scripts/validation/
+
+These modules are the proven G.R.A.F.T.+ graph pipeline.
+Ajenda-specific catalogs, overlays, and proof bundles stay in these files
+until they are extracted. Do not rewrite them in place.
