@@ -88,16 +88,26 @@ def test_function_topology_is_overlay_selected(tmp_path):
     assert _edge(graph, "test:tests/test_flow.py", "fn:app.flow:run", "tests_function")
 
 
-def test_unknown_language_is_inventoried_without_inventing_relationships(tmp_path):
-    (tmp_path / "main.go").write_text("package main\n")
+def test_go_is_mapped_as_source_and_package_topology(tmp_path):
+    (tmp_path / "go.mod").write_text("module example.com/tool\n\ngo 1.22\n")
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "util.go").write_text("package pkg\n\nfunc Value() int { return 1 }\n")
+    (tmp_path / "main.go").write_text(
+        'package main\n\nimport "example.com/tool/pkg"\n\nfunc main() { _ = pkg.Value() }\n'
+    )
+    (tmp_path / "main_test.go").write_text(
+        'package main\n\nimport "example.com/tool/pkg"\n\nfunc TestMain(t *testing.T) { _ = pkg.Value() }\n'
+    )
 
     graph = build_graph(subject=tmp_path)
     completeness = audit(graph, subject=tmp_path)
 
-    node = next(node for node in graph["nodes"] if node["id"] == "file:main.go")
-    assert node["relationship_status"] == "inventory_only"
-    assert graph["facts"]["relationship_unparsed_files"] == ["main.go"]
-    assert completeness["residuals"]["relationship_unparsed_files"] == ["main.go"]
+    ids = {node["id"] for node in graph["nodes"]}
+    assert {"go:main.go", "go:pkg/util.go", "go:package:example.com/tool", "go:package:example.com/tool/pkg"} <= ids
+    assert _edge(graph, "go:main.go", "go:package:example.com/tool/pkg", "imports")
+    assert _edge(graph, "test:main_test.go", "go:package:example.com/tool/pkg", "tests")
+    assert graph["facts"]["relationship_unparsed_files"] == []
+    assert completeness["residuals"]["relationship_unparsed_files"] == []
     assert completeness["integrity_pass"] is True
 
 

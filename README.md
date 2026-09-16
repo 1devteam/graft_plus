@@ -16,7 +16,8 @@ grants_execution_authority: false
 Live engine:
 
 - complete system-bearing file and declared-intent inventory
-- Python, JavaScript/TypeScript/CommonJS, shell, and Bats module/test relationships
+- Python, JavaScript/TypeScript/CommonJS, shell/Bats, Go, Rust, Ruby, PHP,
+  C/C++, Java/Kotlin/Scala, C#, Lua, Elixir, and Swift source relationships
 - package, workspace, dependency, and entrypoint declarations
 - optional function/call/test-function topology for overlay-selected composition roots
 - migrations, tables, routes, contracts, network egress, and delivery surfaces

@@ -12,6 +12,7 @@ from graft_plus.adapters import collect_javascript_graph, collect_shell_graph
 from graft_plus.functions import collect_function_graph
 from graft_plus.graph_types import StaticEdge, StaticNode
 from graft_plus.inventory import collect_package_topology, inventory_nodes, relevant_files
+from graft_plus.languages import collect_additional_language_graph
 from graft_plus.runtime import is_runtime
 
 SKIP_DIRS = {".git", "node_modules", "dist", "build", ".venv", "venv", "__pycache__", ".tox", ".mypy_cache"}
@@ -266,6 +267,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     js_nodes, js_edges, js_unresolved = collect_javascript_graph(subject)
     python_by_source = {node.source: node.id for node in py_nodes}
     shell_nodes, shell_edges, shell_unresolved = collect_shell_graph(subject, python_by_source)
+    language_nodes, language_edges, language_unresolved = collect_additional_language_graph(subject)
     surfaces = collect_surfaces(subject)
     overlay = load_overlay(overlay_path)
     from graft_plus.semantic import collect_semantic
@@ -274,7 +276,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
 
     nodes: list[dict[str, Any]] = [
         {"id": n.id, "type": n.type, "source": n.source, "layer": "generated"}
-        for n in [*py_nodes, *test_nodes, *js_nodes, *shell_nodes, *surfaces]
+        for n in [*py_nodes, *test_nodes, *js_nodes, *shell_nodes, *language_nodes, *surfaces]
     ]
     nodes.extend(semantic["nodes"])
     function_nodes, function_edges = collect_function_graph(subject, overlay, python_by_source)
@@ -285,7 +287,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         nodes.append(node)
     edges: list[dict[str, Any]] = [
         {"from": e.source, "to": e.target, "type": e.type, "evidence": e.evidence, "layer": "generated"}
-        for e in [*py_edges, *test_edges, *js_edges, *shell_edges]
+        for e in [*py_edges, *test_edges, *js_edges, *shell_edges, *language_edges]
     ]
     edges.extend(e for e in semantic["edges"] if e.get("from") and e.get("to"))
     edges.extend(function_edges)
@@ -296,7 +298,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
 
     source_node_ids = {
         node.source: node.id
-        for node in [*py_nodes, *test_nodes, *js_nodes, *shell_nodes, *surfaces]
+        for node in [*py_nodes, *test_nodes, *js_nodes, *shell_nodes, *language_nodes, *surfaces]
     }
     package_nodes, package_edges = collect_package_topology(subject, source_node_ids)
     nodes.extend(package_nodes)
@@ -310,7 +312,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     nodes.extend(fallback_nodes)
 
     unresolved = _dedupe_unresolved(
-        [*py_unresolved, *test_unresolved, *js_unresolved, *shell_unresolved]
+        [*py_unresolved, *test_unresolved, *js_unresolved, *shell_unresolved, *language_unresolved]
     )
     dependency_ids = {
         str(node.get("name")): str(node["id"])
@@ -366,7 +368,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             overlay_rel = str(overlay_path)
     overlay_count = sum(1 for n in nodes if n.get("layer") == "overlay")
     return {
-        "schema_version": "1.3",
+        "schema_version": "1.4",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -374,7 +376,22 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "grants_execution_authority": False,
         "generated_from": {
             "python_roots": [str(p.relative_to(subject)) if p != subject else "." for p in py_roots],
-            "adapters": ["python", "javascript-typescript", "shell-bats", "package-manifests"],
+            "adapters": [
+                "python",
+                "javascript-typescript",
+                "shell-bats",
+                "go",
+                "rust",
+                "ruby",
+                "php",
+                "c-cpp",
+                "java-kotlin-scala",
+                "csharp",
+                "lua",
+                "elixir",
+                "swift",
+                "package-manifests",
+            ],
             "function_roots": overlay.get("function_roots") or [],
             "overlay": overlay_rel,
         },
