@@ -9,8 +9,10 @@ from pathlib import Path
 
 from graft_plus.completeness import audit
 from graft_plus.decision import decide
-from graft_plus.graph import build_graph
+from graft_plus.fetch import clone_public_repo
+from graft_plus.graph import build_graph, load_overlay
 from graft_plus.impact import analyze_impact, changed_files
+from graft_plus.proof import select_proofs
 
 
 def _write(path: Path, payload: dict) -> None:
@@ -23,9 +25,16 @@ def _git_sha(subject: Path) -> str | None:
     return r.stdout.strip() if r.returncode == 0 else None
 
 
-def reconstruct(subject: Path, out: Path, overlay: Path | None, base_ref: str | None, head_ref: str | None) -> int:
+def reconstruct(
+    subject: Path,
+    out: Path,
+    overlay: Path | None,
+    base_ref: str | None,
+    head_ref: str | None,
+) -> int:
     graph = build_graph(subject=subject, overlay_path=overlay)
-    completeness = audit(graph)
+    overlay_payload = load_overlay(overlay)
+    completeness = audit(graph, overlay_payload)
     impact = {
         "schema_version": "1.0",
         "changed_files": [],
@@ -40,18 +49,28 @@ def reconstruct(subject: Path, out: Path, overlay: Path | None, base_ref: str | 
     }
     if base_ref and head_ref:
         impact = analyze_impact(graph, changed_files(subject, base_ref, head_ref))
+    proofs = select_proofs(impact, overlay_payload)
     decision = decide(graph=graph, impact=impact, completeness=completeness)
     _write(out / "dependency-graph.v1.json", graph)
     _write(out / "graph-completeness-report.json", completeness)
     _write(out / "graph-impact-report.json", impact)
+    _write(out / "graph-proof-manifest.json", proofs)
     _write(out / "graph-architecture-decision.json", decision)
     receipt = {
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "subject": str(subject),
         "subject_sha": _git_sha(subject),
-        "status": "passed" if completeness.get("integrity_pass") else "failed",
+        "status": "passed" if completeness.get("integrity_pass") and not completeness.get("unacknowledged_blocking_findings") else "failed",
         "decipher": "graph-architecture-decision.json",
+        "files": [
+            "graph-architecture-decision.json",
+            "dependency-graph.v1.json",
+            "graph-completeness-report.json",
+            "graph-impact-report.json",
+            "graph-proof-manifest.json",
+            "graft-plus-receipt.json",
+        ],
         "grants_execution_authority": False,
         "implementsPlan": False,
         "merge_authorization": "not-determined",
@@ -66,16 +85,28 @@ def reconstruct(subject: Path, out: Path, overlay: Path | None, base_ref: str | 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="G.R.A.F.T.+ reconstruction map for AI review")
     sub = parser.add_subparsers(dest="cmd", required=True)
-    rec = sub.add_parser("reconstruct", help="Build the decipher pack for a subject tree")
-    rec.add_argument("--subject", type=Path, default=Path("."), help="Subject repository root")
+    rec = sub.add_parser("reconstruct", help="Build the decipher pack for a subject tree or public repo")
+    rec.add_argument("--subject", type=Path, default=None, help="Local subject repository root")
+    rec.add_argument("--repo", default=None, help="Public GitHub owner/repo or URL")
+    rec.add_argument("--ref", default=None, help="Git ref when using --repo")
     rec.add_argument("--out", type=Path, default=Path("artifacts/graft-pack"))
     rec.add_argument("--overlay", type=Path, default=None)
     rec.add_argument("--base-ref", default=None)
     rec.add_argument("--head-ref", default=None)
     args = parser.parse_args(argv)
-    if args.cmd == "reconstruct":
-        return reconstruct(args.subject.resolve(), args.out, args.overlay, args.base_ref, args.head_ref)
-    return 2
+    if args.cmd != "reconstruct":
+        return 2
+    if args.subject and args.repo:
+        parser.error("pass only one of --subject or --repo")
+    if args.repo:
+        subject = clone_public_repo(args.repo, ref=args.ref)
+    else:
+        subject = (args.subject or Path(".")).resolve()
+    overlay = args.overlay
+    if overlay is None:
+        default_overlay = subject / "docs" / "contracts" / "dependency-graph.overlay.v1.json"
+        overlay = default_overlay if default_overlay.exists() else None
+    return reconstruct(subject, args.out, overlay, args.base_ref, args.head_ref)
 
 
 if __name__ == "__main__":

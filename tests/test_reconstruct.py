@@ -61,3 +61,30 @@ def test_artifact_is_reconstruction_not_source_dump(tmp_path):
     assert "GRAFT-PACK.json" not in names
     assert not list(out.glob("*.zip"))
     assert not (out / "tree").exists()
+
+
+def test_public_repo_parse():
+    from graft_plus.fetch import parse_public_repo
+    assert parse_public_repo("octocat/Hello-World") == ("octocat", "Hello-World")
+    assert parse_public_repo("https://github.com/octocat/Hello-World") == ("octocat", "Hello-World")
+
+
+def test_proof_has_no_ajenda_bundles():
+    from graft_plus.proof import select_proofs
+    src = Path(__file__).resolve().parents[1] / "src"
+    text = (src / "graft_plus" / "proof.py").read_text()
+    assert "tenant-isolation" not in text
+    assert "hubspot" not in text.lower()
+    assert "ajenda" not in text.lower()
+    manifest = select_proofs({"impacted_tests": ["test:tests/test_reconstruct.py"], "changed_node_count": 1}, {})
+    assert manifest["required_tests"] == ["test:tests/test_reconstruct.py"]
+    assert manifest["selected_bundles"] == []
+
+
+def test_cli_writes_proof_manifest(tmp_path):
+    out = tmp_path / "pack"
+    assert reconstruct(FIXTURE, out, None, None, None) == 0
+    names = {p.name for p in out.iterdir()}
+    assert "graph-proof-manifest.json" in names
+    assert "graph-architecture-decision.json" in names
+    assert "GRAFT-MAP.md" not in names

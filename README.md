@@ -1,8 +1,8 @@
 # G.R.A.F.T.+ (`graft_plus`)
 
-Reconstruction method. It emits a **system map** so an AI can see what already exists.
+Reconstruction method extracted from a proven Ajenda pipeline. Project-agnostic. No Ajenda domain logic.
 
-It replaces the 1devteam.com snapshot ingest. It does not zip the repo. It does not dump source. It is not Ajenda's CI gate.
+Point it at an existing public repository. It writes a pack an AI can read. 1devteam.com hosts that pack. It does not dump source.
 
 ```text
 product: G.R.A.F.T.+
@@ -17,9 +17,9 @@ grants_execution_authority: false
 
 ```bash
 pip install -e ".[dev]"
-graft-plus reconstruct --subject /path/to/repo --out artifacts/graft-pack
+graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
 ```
 
-Decipher `graph-architecture-decision.json` first. Then the graph.
+Decipher `graph-architecture-decision.json` first.
 
 See [docs/ARTIFACT.md](docs/ARTIFACT.md).

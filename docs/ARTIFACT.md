@@ -1,23 +1,30 @@
 # What the artifact is
 
-G.R.A.F.T.+ writes a reconstruction pack. An AI reviews it to see what already exists.
+G.R.A.F.T.+ reconstructs one existing system (a *subject*) into a pack an AI can review.
 
-It is not a zip of the source tree. That snapshot ingest on 1devteam.com is what this builder replaces.
+It is not a zip of the source tree. It is not Ajenda. It is not merge permission.
 
-## The pack
+## Pack (in order)
 
-Hand these files to an AI, in this order:
-
-1. `graph-architecture-decision.json` — decipher this first. Disposition of the map. Always `merge_authorization: not-determined`.
-2. `dependency-graph.v1.json` — inventory: modules, tests, imports, optional overlay.
-3. `graph-completeness-report.json` — named gaps and integrity.
+1. `graph-architecture-decision.json` — decipher first. Disposition of the map. Always `merge_authorization: not-determined`.
+2. `dependency-graph.v1.json` — generated structure (modules, tests, imports) plus optional overlay.
+3. `graph-completeness-report.json` — named gaps. Acknowledgements are not repairs.
 4. `graph-impact-report.json` — blast radius when a git range was given.
-5. `graft-plus-receipt.json` — what ran, against which SHA.
+5. `graph-proof-manifest.json` — tests/gates implied by impact. Bundles come from the subject's overlay, never from this package.
+6. `graft-plus-receipt.json` — what ran, which SHA.
 
-## Not in the pack
+## Point at a public repo
 
-- The subject's source (`tree/`, `GRAFT-MAP.md` file bodies, snapshot zip)
-- A plan or next-slice recommendation
-- Merge permission, lease, or execution authority
-- Ajenda job catalog, abilities, or runtime admission
-- Overlay invented without evidence
+```bash
+graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
+```
+
+Or a local tree:
+
+```bash
+graft-plus reconstruct --subject /path/to/repo --out artifacts/graft-pack
+```
+
+## Overlay (optional, subject-owned)
+
+A subject may supply `docs/contracts/dependency-graph.overlay.v1.json` for relationships imports cannot see, invariants, acknowledgements, and proof bundles. This package ships no Ajenda jobs, leases, HubSpot, or RLS rules.
