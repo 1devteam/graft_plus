@@ -1,20 +1,44 @@
-# What the artifact is
+# Reading a G.R.A.F.T.+ pack
 
-G.R.A.F.T.+ reconstructs one existing system (a *subject*) into a pack an AI can review.
+Start with `graph-architecture-decision.json`, then use
+`dependency-graph.v1.json` for the evidence behind the summary.
 
-It is not a zip of the source tree. It is not Ajenda. It is not merge permission.
+The graph is a source-backed map, not a source dump and not an adjudicator. It
+records system-bearing files, declared intent documents, modules, tests,
+packages, entrypoints, dependencies, routes, data tables, contracts, egress,
+and the relationships an adapter can prove. Files in a recognized source
+language without a relationship adapter remain visible as `file:*` nodes with
+`relationship_status: inventory_only`; they are also listed under
+`facts.relationship_unparsed_files`.
 
-Generated inventory is ported from the proven Ajenda graph: modules, tests, imports, migrations, tables, HTTP routes, network egress, CI/docker/manifests. Overlay (ownership, authority, policy) stays residual until a reviewed relationship is attached.
+Edges use consumer-to-dependency direction. A reverse walk therefore answers
+"what can this change affect?" and a forward walk answers "what does this
+piece depend on?" Test edges identify directly relevant tests. Semantic edges
+connect source modules to routes, tables, contracts, migrations, and egress
+sinks. Every emitted edge endpoint must resolve to exactly one node.
 
-## Pack (in order)
+Intent is kept honest in two layers:
 
-1. `graph-architecture-decision.json` — decipher first. Always `merge_authorization: not-determined`.
-2. `dependency-graph.v1.json` — the graph. Nodes tagged `generated` or `overlay`.
-3. `graph-completeness-report.json` — integrity plus residuals.
-4. `graph-impact-report.json` — blast radius when a git range was given (upstream consumers, downstream dependencies, impacted tests, semantic nodes).
-5. `graph-proof-manifest.json` — tests implied by impact. Bundles come from overlay.
-6. `graft-plus-receipt.json` — what ran, which SHA.
+- Generated facts identify manifests, READMEs, architecture decisions, and
+  plan/specification documents without claiming that their contents are true.
+- A reviewed overlay may add subject-specific jobs, artifacts, inputs,
+  actions, authority boundaries, invariants, and proof bundles. Those concepts
+  are not guessed from names.
 
-```bash
-graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
-```
+Function topology is deliberately selective. Add repository-relative paths to
+`function_roots` in the overlay to emit `python_function`, `defines_function`,
+`calls_function`, and `tests_function` facts for composition-heavy code.
+
+The remaining reports answer narrower questions:
+
+- `graph-impact-report.json`: changed nodes, upstream consumers, downstream
+  dependencies, semantic reach, and impacted tests for a requested git range.
+- `graph-completeness-report.json`: endpoint integrity, stale evidence,
+  parser-coverage residuals, boundaries, cycles, and acknowledged findings.
+- `graph-proof-manifest.json`: overlay-selected proof obligations; it never
+  invents product-specific gates.
+- `graft-plus-receipt.json`: subject revision and reconstruction status.
+
+`clear` means the emitted map passed its integrity checks. It does not grant
+merge or execution authority, prove runtime behavior, infer router prefixes,
+or turn declared intent into fact.

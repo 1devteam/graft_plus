@@ -15,7 +15,11 @@ grants_execution_authority: false
 
 Live engine:
 
-- generated inventory (modules, tests, imports, migrations, tables, routes, egress, surfaces)
+- complete system-bearing file and declared-intent inventory
+- Python, JavaScript/TypeScript/CommonJS, shell, and Bats module/test relationships
+- package, workspace, dependency, and entrypoint declarations
+- optional function/call/test-function topology for overlay-selected composition roots
+- migrations, tables, routes, contracts, network egress, and delivery surfaces
 - optional overlay (ownership, authority, policy) — residual until attached
 - blast radius when a git range is given
 - completeness ratchet (acknowledgement is not a repair)

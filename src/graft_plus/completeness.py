@@ -14,13 +14,22 @@ from graft_plus.coverage import inventory as coverage_inventory
 
 TEST_EDGE_TYPES = frozenset({"tests", "tests_function"})
 STATIC_EDGE_TYPE = "imports"
-SOURCE_NODE_PREFIXES = ("py:", "fe:")
+SOURCE_NODE_PREFIXES = ("py:", "js:", "sh:", "fn:")
 
 TYPE_BOUNDARY = {
     "runtime": "runtime",
     "security_boundary": "security-boundary",
     "external_service": "external",
     "frontend_module": "frontend",
+    "javascript_module": "javascript",
+    "shell_module": "shell",
+    "python_function": "python-function",
+    "software_package": "package",
+    "external_dependency": "external-dependency",
+    "source_file": "source-inventory",
+    "test_file": "tests",
+    "documentation": "documentation",
+    "configuration": "configuration",
     "test_module": "tests",
     "database_table": "database",
     "migration": "database-migration",
@@ -48,7 +57,11 @@ def architectural_boundary(node: dict[str, Any]) -> str:
 
 
 def _production_nodes(graph: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    return {str(node["id"]): node for node in graph["nodes"] if str(node.get("type")) != "test_module"}
+    return {
+        str(node["id"]): node
+        for node in graph["nodes"]
+        if str(node.get("type")) not in {"test_module", "test_file"}
+    }
 
 
 def _production_edges(graph: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
@@ -274,7 +287,9 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
         "no_git_range": not bool(impact.get("changed_files")),
         "unmapped_changed_files": list(impact.get("unmapped_changed_files") or []),
         "unmapped_source_file_count": coverage.get("unmapped_source_file_count", 0),
-        "unmapped_source_files": (coverage.get("unmapped_source_files") or [])[:50],
+        "unmapped_source_files": coverage.get("unmapped_source_files") or [],
+        "relationship_unparsed_file_count": coverage.get("relationship_unparsed_file_count", 0),
+        "relationship_unparsed_files": coverage.get("relationship_unparsed_files") or [],
         "stale_graph_source_count": coverage.get("stale_graph_source_count", 0),
         "stale_graph_sources": coverage.get("stale_graph_sources") or [],
         "known_violations": known_violations,
@@ -307,6 +322,7 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
             "known_violations": known_violations,
             "semantic_finding_count": len(findings),
             "unmapped_source_file_count": coverage.get("unmapped_source_file_count", 0),
+            "relationship_unparsed_file_count": coverage.get("relationship_unparsed_file_count", 0),
             "stale_graph_source_count": coverage.get("stale_graph_source_count", 0),
             "pass": integrity_pass,
         },
