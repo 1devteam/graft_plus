@@ -11,6 +11,13 @@ language without a relationship adapter remain visible as `file:*` nodes with
 `relationship_status: inventory_only`; they are also listed under
 `facts.relationship_unparsed_files`.
 
+Language adapters cover Python; JavaScript, TypeScript, and CommonJS; shell
+and Bats; Go; Rust; Ruby; PHP; C and C++; Java, Kotlin, and Scala; C#; Lua;
+Elixir; and Swift. Resolution remains language-appropriate: for example, Go
+imports target declared repository packages, JVM imports target exact declared
+symbols, and Swift build-module imports remain unresolved unless the source
+tree proves their target.
+
 Edges use consumer-to-dependency direction. A reverse walk therefore answers
 "what can this change affect?" and a forward walk answers "what does this
 piece depend on?" Test edges identify directly relevant tests. Semantic edges
