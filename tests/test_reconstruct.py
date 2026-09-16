@@ -138,6 +138,41 @@ def test_semantic_inventory_from_ajenda_logic(tmp_path):
     completeness = audit(graph)
     decision = decide(graph=graph, impact={"changed_files": []}, completeness=completeness)
     assert decision["decision"]["merge_authorization"] == "not-determined"
+    assert "unresolved_imports" not in completeness["residuals"]
+    assert "unresolved_import_count" in completeness["residuals"]
+
+
+def test_flask_django_express_and_stdlib_are_classified(tmp_path):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "web.py").write_text(
+        "import ctypes\n"
+        "import binascii\n"
+        "import stripe\n"
+        "from flask import Flask\n"
+        "app = Flask(__name__)\n"
+        "@app.route('/status', methods=['GET', 'POST'])\n"
+        "def status():\n"
+        "    return 'ok'\n"
+        "class Watch:\n"
+        "    __tablename__ = 'watches'\n"
+    )
+    (tmp_path / "app" / "urls.py").write_text("from django.urls import path\nurlpatterns = [path('crm/', views.crm)]\n")
+    (tmp_path / "server.js").write_text("router.post('/pay', charge);\n")
+    graph = build_graph(subject=tmp_path)
+    ids = {n["id"] for n in graph["nodes"]}
+    specs = {row["specifier"] for row in graph["facts"]["unresolved_imports"]}
+    roots = set(graph["facts"]["unresolved_package_roots"])
+    assert "route:GET /status" in ids
+    assert "route:POST /status" in ids
+    assert "route:ANY crm/" in ids
+    assert "route:POST /pay" in ids
+    assert "db:table:watches" in ids
+    assert "ctypes" not in specs
+    assert "binascii" not in specs
+    assert "stripe" in specs
+    assert "" not in roots
+
 
 
 def test_completeness_ratchet_acknowledgement_is_not_repair():

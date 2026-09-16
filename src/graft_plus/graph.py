@@ -12,18 +12,7 @@ from typing import Any
 
 FRONTEND_IMPORT_RE = re.compile(r"(?:import|export)\s+(?:[^'\"]+?\s+from\s+)?['\"]([^'\"]+)['\"]")
 SKIP_DIRS = {".git", "node_modules", "dist", "build", ".venv", "venv", "__pycache__", ".tox", ".mypy_cache"}
-RUNTIME_ROOTS = {
-    "abc", "argparse", "ast", "asyncio", "base64", "collections", "concurrent", "configparser",
-    "contextlib", "copy", "csv", "dataclasses", "datetime", "decimal", "email", "enum",
-    "fnmatch", "functools", "getpass", "glob", "gzip", "hashlib", "hmac", "html", "http",
-    "importlib", "inspect", "io", "itertools", "json", "logging", "math", "mmap",
-    "multiprocessing", "os", "pathlib", "pickle", "pkgutil", "platform", "pprint", "queue",
-    "random", "re", "secrets", "shutil", "signal", "socket", "sqlite3", "ssl", "statistics",
-    "string", "struct", "subprocess", "sys", "tarfile", "tempfile", "textwrap", "threading",
-    "time", "tomllib", "traceback", "types", "typing", "unicodedata", "unittest", "urllib",
-    "uuid", "warnings", "weakref", "webbrowser", "xml", "zipfile", "__future__",
-    "node:fs", "node:path", "node:url", "node:test", "node:crypto", "node:assert",
-}
+from graft_plus.runtime import is_runtime
 
 
 def _rel(subject: Path, path: Path) -> str:
@@ -31,8 +20,7 @@ def _rel(subject: Path, path: Path) -> str:
 
 
 def _runtime(specifier: str) -> bool:
-    root = specifier.split(".")[0].split("/")[0]
-    return root in RUNTIME_ROOTS or specifier.startswith("node:")
+    return is_runtime(specifier)
 
 
 def _package_root(specifier: str) -> str:
@@ -157,6 +145,8 @@ def collect_python_graph(subject: Path, roots: list[Path]) -> tuple[list[StaticN
                     candidates.append(base)
                     candidates.extend(f"{base}.{alias.name}" for alias in item.names if alias.name != "*")
             for name in candidates:
+                if not name:
+                    continue
                 target = _best_target(name, modules)
                 if target and target != module:
                     imported.add(target)
@@ -192,6 +182,8 @@ def collect_test_graph(subject: Path, production_modules: set[str]) -> tuple[lis
             elif isinstance(item, ast.ImportFrom) and item.level == 0 and item.module:
                 candidates.append(item.module)
             for name in candidates:
+                if not name:
+                    continue
                 target = _best_target(name, production_modules)
                 if target:
                     edges.add(StaticEdge(source=node_id, target=f"py:{target}", type="tests", evidence=rel))

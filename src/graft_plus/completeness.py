@@ -260,7 +260,7 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
                 missing_edge_evidence.append(evidence)
     integrity_pass = not missing_endpoints and not unacknowledged_blocking and not missing_edge_evidence
     overlay_nodes = [n for n in graph["nodes"] if n.get("layer") == "overlay"]
-    unresolved = list((graph.get("facts") or {}).get("unresolved_imports") or [])
+    unresolved_roots = list((graph.get("facts") or {}).get("unresolved_package_roots") or [])
     coverage = coverage_inventory(subject, graph) if subject is not None else {
         "unmapped_source_files": [],
         "stale_graph_sources": [],
@@ -269,11 +269,13 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
     }
     residuals = {
         "overlay": "attached" if overlay_nodes else "residual",
-        "unresolved_imports": unresolved,
-        "unresolved_package_roots": list((graph.get("facts") or {}).get("unresolved_package_roots") or []),
+        "unresolved_import_count": len((graph.get("facts") or {}).get("unresolved_imports") or []),
+        "unresolved_package_roots": unresolved_roots,
         "no_git_range": not bool(impact.get("changed_files")),
         "unmapped_changed_files": list(impact.get("unmapped_changed_files") or []),
-        "unmapped_source_files": coverage.get("unmapped_source_files") or [],
+        "unmapped_source_file_count": coverage.get("unmapped_source_file_count", 0),
+        "unmapped_source_files": (coverage.get("unmapped_source_files") or [])[:50],
+        "stale_graph_source_count": coverage.get("stale_graph_source_count", 0),
         "stale_graph_sources": coverage.get("stale_graph_sources") or [],
         "known_violations": known_violations,
         "unacknowledged_blocking_findings": unacknowledged_blocking,

@@ -68,6 +68,20 @@ def _literal_string(node: ast.AST | None) -> str | None:
     return None
 
 
+def _literal_strings(node: ast.AST | None) -> tuple[str, ...]:
+    if node is None:
+        return ()
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        values = [_literal_string(item) for item in node.elts]
+        return tuple(v for v in values if v)
+    value = _literal_string(node)
+    return (value,) if value else ()
+
+
+def _keyword(call: ast.Call, name: str) -> ast.AST | None:
+    return next((item.value for item in call.keywords if item.arg == name), None)
+
+
 def _migration_table_changes(tree: ast.Module) -> dict[str, set[str]]:
     tables: dict[str, set[str]] = defaultdict(set)
     for item in ast.walk(tree):
@@ -277,6 +291,35 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     seen: set[str] = set()
+
+    def add_route(method: str, path_lit: str, rel: str, module: str | None, handler: str | None = None) -> None:
+        method = method.upper()
+        route_id = f"route:{method} {path_lit}"
+        if route_id in seen:
+            return
+        seen.add(route_id)
+        nodes.append(
+            {
+                "id": route_id,
+                "type": "http_route",
+                "source": rel,
+                "layer": "generated",
+                "method": method,
+                "path": path_lit,
+                "handler": handler,
+            }
+        )
+        if module:
+            edges.append(
+                {
+                    "from": f"py:{module}",
+                    "to": route_id,
+                    "type": "exposes_route",
+                    "evidence": rel,
+                    "layer": "generated",
+                }
+            )
+
     for path in _production_py(subject):
         rel = _rel(subject, path)
         try:
@@ -285,42 +328,100 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
             continue
         module = _module_for_path(subject, path)
         for item in ast.walk(tree):
+            if isinstance(item, ast.Call):
+                name = (_call_name(item.func) or "").rsplit(".", 1)[-1]
+                if name in {"path", "re_path", "url"} and item.args:
+                    path_lit = _literal_string(item.args[0])
+                    if path_lit:
+                        add_route("ANY", path_lit, rel, module)
             if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
             for decorator in item.decorator_list:
                 if not isinstance(decorator, ast.Call):
                     continue
                 name = (_call_name(decorator.func) or "").lower()
-                method = name.rsplit(".", 1)[-1]
-                if method not in _ROUTE_METHODS:
-                    continue
+                last = name.rsplit(".", 1)[-1]
                 path_lit = _literal_string(decorator.args[0]) if decorator.args else None
-                if not path_lit:
+                if last == "route" and path_lit:
+                    methods = _literal_strings(_keyword(decorator, "methods")) or ("GET",)
+                    for method in methods:
+                        add_route(method, path_lit, rel, module, item.name)
                     continue
-                route_id = f"route:{method.upper()} {path_lit}"
-                if route_id in seen:
+                if last not in _ROUTE_METHODS or not path_lit:
                     continue
-                seen.add(route_id)
-                nodes.append(
-                    {
-                        "id": route_id,
-                        "type": "http_route",
-                        "source": rel,
-                        "layer": "generated",
-                        "method": method.upper(),
-                        "path": path_lit,
-                        "handler": item.name,
-                    }
-                )
-                edges.append(
-                    {
-                        "from": f"py:{module}",
-                        "to": route_id,
-                        "type": "exposes_route",
-                        "evidence": rel,
-                        "layer": "generated",
-                    }
-                )
+                add_route(last, path_lit, rel, module, item.name)
+
+    js_re = re.compile(r"\b(?:app|router|api)\.(get|post|put|patch|delete|all)\(\s*['\"]([^'\"]+)", re.I)
+    for path in subject.rglob("*"):
+        if _skip(path) or path.suffix not in {".js", ".ts", ".mjs"}:
+            continue
+        rel = _rel(subject, path)
+        if rel.startswith("tests/") or "/node_modules/" in rel:
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for match in js_re.finditer(text):
+            add_route(match.group(1), match.group(2), rel, None)
+
+    return nodes, edges
+
+
+def collect_orm_tables(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for path in _production_py(subject):
+        rel = _rel(subject, path)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=rel)
+        except (OSError, SyntaxError):
+            continue
+        module = _module_for_path(subject, path)
+        for item in tree.body:
+            if not isinstance(item, ast.ClassDef):
+                continue
+            table = None
+            bases = []
+            for base in item.bases:
+                if isinstance(base, ast.Name):
+                    bases.append(base.id)
+                elif isinstance(base, ast.Attribute):
+                    bases.append(base.attr)
+            django = "Model" in bases
+            for stmt in item.body:
+                if isinstance(stmt, ast.Assign):
+                    names = [t.id for t in stmt.targets if isinstance(t, ast.Name)]
+                    if "__tablename__" in names:
+                        table = _literal_string(stmt.value)
+            if django and not table:
+                table = item.name.lower()
+            if not table:
+                continue
+            tid = f"db:table:{table}"
+            if tid in seen:
+                continue
+            seen.add(tid)
+            nodes.append(
+                {
+                    "id": tid,
+                    "type": "database_table",
+                    "label": table,
+                    "source": rel,
+                    "layer": "generated",
+                    "orm": "sqlalchemy" if not django else "django",
+                }
+            )
+            edges.append(
+                {
+                    "from": f"py:{module}",
+                    "to": tid,
+                    "type": "defines_table",
+                    "evidence": rel,
+                    "layer": "generated",
+                }
+            )
     return nodes, edges
 
 
@@ -409,11 +510,15 @@ def collect_contracts(subject: Path) -> tuple[list[dict[str, Any]], list[dict[st
 
 def collect_semantic(subject: Path) -> dict[str, Any]:
     mig_nodes, mig_edges = collect_migrations(subject)
+    orm_nodes, orm_edges = collect_orm_tables(subject)
+    known_tables = {n["id"] for n in mig_nodes if n.get("type") == "database_table"}
+    orm_nodes = [n for n in orm_nodes if n["id"] not in known_tables]
+    orm_edges = [e for e in orm_edges if e["to"] not in known_tables]
     egress_nodes, egress_edges = collect_egress(subject)
     route_nodes, route_edges = collect_routes(subject)
     contract_nodes, contract_edges = collect_contracts(subject)
     return {
-        "nodes": [*mig_nodes, *egress_nodes, *route_nodes, *contract_nodes],
-        "edges": [*mig_edges, *egress_edges, *route_edges, *contract_edges],
+        "nodes": [*mig_nodes, *orm_nodes, *egress_nodes, *route_nodes, *contract_nodes],
+        "edges": [*mig_edges, *orm_edges, *egress_edges, *route_edges, *contract_edges],
     }
 
