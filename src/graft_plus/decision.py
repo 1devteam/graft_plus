@@ -14,19 +14,22 @@ def _sha(payload: dict[str, Any]) -> str:
 
 
 def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[str, Any]) -> dict[str, Any]:
-    blocking = list(completeness.get("unacknowledged_blocking_findings") or [])
+    blocking = list((completeness.get("integrity") or {}).get("unacknowledged_blocking_findings") or completeness.get("unacknowledged_blocking_findings") or [])
     residuals = completeness.get("residuals") or {}
     review = []
     if impact.get("unmapped_changed_file_count"):
         review.append("unmapped_changed_files")
     if residuals.get("overlay") == "residual":
         review.append("overlay_residual")
+    if (completeness.get("integrity") or {}).get("known_violations"):
+        review.append("known_violations_visible")
     warnings = []
     if residuals.get("no_git_range"):
         warnings.append("no_git_range")
     if residuals.get("unresolved_package_roots"):
         warnings.append("unresolved_imports")
-    if not completeness.get("integrity_pass") or blocking:
+    integrity_pass = bool(completeness.get("integrity_pass") if "integrity_pass" in completeness else (completeness.get("integrity") or {}).get("pass"))
+    if not integrity_pass or blocking:
         disposition = "blocked"
     elif impact.get("unmapped_changed_file_count"):
         disposition = "review-required"

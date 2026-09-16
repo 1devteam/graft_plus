@@ -48,7 +48,7 @@ def reconstruct(
     }
     if base_ref and head_ref:
         impact = analyze_impact(graph, changed_files(subject, base_ref, head_ref))
-    completeness = audit(graph, overlay_payload, impact)
+    completeness = audit(graph, overlay_payload, impact, subject)
     proofs = select_proofs(impact, overlay_payload)
     decision = decide(graph=graph, impact=impact, completeness=completeness)
     _write(out / "dependency-graph.v1.json", graph)

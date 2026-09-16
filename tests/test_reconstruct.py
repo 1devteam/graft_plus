@@ -138,3 +138,37 @@ def test_semantic_inventory_from_ajenda_logic(tmp_path):
     completeness = audit(graph)
     decision = decide(graph=graph, impact={"changed_files": []}, completeness=completeness)
     assert decision["decision"]["merge_authorization"] == "not-determined"
+
+
+def test_completeness_ratchet_acknowledgement_is_not_repair():
+    graph = build_graph(subject=FIXTURE)
+    overlay = {
+        "findings": [
+            {
+                "id": "rls-missing:users",
+                "blocking": True,
+                "classification": "known_violation",
+                "summary": "table users lacks RLS",
+            }
+        ]
+    }
+    blocked = audit(graph, overlay)
+    assert blocked["integrity_pass"] is False
+    assert "rls-missing:users" in blocked["unacknowledged_blocking_findings"]
+    assert blocked["integrity"]["pass"] is False
+    decision = decide(graph=graph, impact={"changed_files": []}, completeness=blocked)
+    assert decision["decision"]["architecture_disposition"] == "blocked"
+    assert decision["decision"]["merge_authorization"] == "not-determined"
+
+    overlay["acknowledged_findings"] = ["rls-missing:users"]
+    known = audit(graph, overlay)
+    assert known["integrity_pass"] is True
+    assert "rls-missing:users" in known["acknowledged_findings"]
+    assert "rls-missing:users" in known["integrity"]["known_violations"]
+    finding = next(item for item in known["semantic_findings"] if item["id"] == "rls-missing:users")
+    assert finding["acknowledged"] is True
+    passed = decide(graph=graph, impact={"changed_files": []}, completeness=known)
+    assert passed["decision"]["architecture_disposition"] == "clear"
+    assert "known_violations_visible" in passed["decision"]["review_reasons"]
+    assert passed["decision"]["merge_authorization"] == "not-determined"
+

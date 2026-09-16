@@ -34,6 +34,15 @@ def select_proofs(impact: dict[str, Any], overlay: dict[str, Any] | None = None)
     manual_review = []
     if impact.get("unmapped_changed_files"):
         manual_review.append("Review unmapped changed files; the graph does not yet model them.")
+    for invariant in impact.get("relevant_invariants") or []:
+        status = str(invariant.get("status") or "")
+        invariant_id = str(invariant.get("id") or "")
+        if status == "known_violation":
+            manual_review.append(
+                f"Invariant {invariant_id} has a known baseline violation; an acknowledgement is not a repair."
+            )
+        elif status == "policy_drift":
+            manual_review.append(f"Invariant {invariant_id} is recorded as policy drift and requires human review.")
     return {
         "schema_version": "1.0",
         "selected_bundles": [
