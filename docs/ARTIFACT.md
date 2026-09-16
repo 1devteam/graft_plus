@@ -18,6 +18,14 @@ imports target declared repository packages, JVM imports target exact declared
 symbols, and Swift build-module imports remain unresolved unless the source
 tree proves their target.
 
+Schema 1.5 also emits `facts.relationship_boundaries`. Each row names the
+source file, line, language, evidence, and reason for a relationship that
+requires build or runtime context. The ledger covers dynamic loading,
+wildcard imports, dependency injection, router composition, generated source,
+code-generation declarations, and build-module mappings. `declared` rows are
+source-visible facts; `unresolved` rows identify the exact next inspection
+needed. Neither kind is converted into a speculative edge.
+
 Edges use consumer-to-dependency direction. A reverse walk therefore answers
 "what can this change affect?" and a forward walk answers "what does this
 piece depend on?" Test edges identify directly relevant tests. Semantic edges

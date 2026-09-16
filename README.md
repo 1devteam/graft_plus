@@ -21,6 +21,7 @@ Live engine:
 - package, workspace, dependency, and entrypoint declarations
 - optional function/call/test-function topology for overlay-selected composition roots
 - migrations, tables, routes, contracts, network egress, and delivery surfaces
+- source-and-line boundary ledger for relationships requiring build or runtime context
 - optional overlay (ownership, authority, policy) — residual until attached
 - blast radius when a git range is given
 - completeness ratchet (acknowledgement is not a repair)

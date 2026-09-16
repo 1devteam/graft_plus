@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from graft_plus.adapters import collect_javascript_graph, collect_shell_graph
+from graft_plus.boundaries import collect_relationship_boundaries
 from graft_plus.functions import collect_function_graph
 from graft_plus.graph_types import StaticEdge, StaticNode
 from graft_plus.inventory import collect_package_topology, inventory_nodes, relevant_files
@@ -310,6 +311,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     }
     fallback_nodes, inventory_facts = inventory_nodes(subject, mapped_sources=mapped_sources)
     nodes.extend(fallback_nodes)
+    boundary_facts = collect_relationship_boundaries(subject)
 
     unresolved = _dedupe_unresolved(
         [*py_unresolved, *test_unresolved, *js_unresolved, *shell_unresolved, *language_unresolved]
@@ -368,7 +370,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             overlay_rel = str(overlay_path)
     overlay_count = sum(1 for n in nodes if n.get("layer") == "overlay")
     return {
-        "schema_version": "1.4",
+        "schema_version": "1.5",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -391,6 +393,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
                 "elixir",
                 "swift",
                 "package-manifests",
+                "relationship-boundary-ledger",
             ],
             "function_roots": overlay.get("function_roots") or [],
             "overlay": overlay_rel,
@@ -403,6 +406,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             "unresolved_package_roots": sorted({_package_root(row["specifier"]) for row in unresolved}),
             "declared_external_imports": declared_external_imports,
             **inventory_facts,
+            **boundary_facts,
         },
         "metrics": {
             **_metrics(node_ids, edges),
@@ -412,6 +416,13 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             "inventory_file_count": inventory_facts["file_count"],
             "relationship_parsed_file_count": inventory_facts["relationship_parsed_file_count"],
             "relationship_unparsed_file_count": inventory_facts["relationship_unparsed_file_count"],
+            "relationship_boundary_count": boundary_facts["relationship_boundary_count"],
+            "unresolved_relationship_boundary_count": boundary_facts[
+                "unresolved_relationship_boundary_count"
+            ],
+            "relationship_boundary_counts_by_kind": boundary_facts[
+                "relationship_boundary_counts_by_kind"
+            ],
         },
     }
 

@@ -301,6 +301,14 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
         "unmapped_source_files": coverage.get("unmapped_source_files") or [],
         "relationship_unparsed_file_count": coverage.get("relationship_unparsed_file_count", 0),
         "relationship_unparsed_files": coverage.get("relationship_unparsed_files") or [],
+        "relationship_boundary_count": int((graph.get("facts") or {}).get("relationship_boundary_count") or 0),
+        "unresolved_relationship_boundary_count": int(
+            (graph.get("facts") or {}).get("unresolved_relationship_boundary_count") or 0
+        ),
+        "relationship_boundary_counts_by_kind": dict(
+            (graph.get("facts") or {}).get("relationship_boundary_counts_by_kind") or {}
+        ),
+        "relationship_boundaries": list((graph.get("facts") or {}).get("relationship_boundaries") or []),
         "stale_graph_source_count": coverage.get("stale_graph_source_count", 0),
         "stale_graph_sources": coverage.get("stale_graph_sources") or [],
         "known_violations": known_violations,
@@ -334,6 +342,9 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
             "semantic_finding_count": len(findings),
             "unmapped_source_file_count": coverage.get("unmapped_source_file_count", 0),
             "relationship_unparsed_file_count": coverage.get("relationship_unparsed_file_count", 0),
+            "unresolved_relationship_boundary_count": int(
+                (graph.get("facts") or {}).get("unresolved_relationship_boundary_count") or 0
+            ),
             "stale_graph_source_count": coverage.get("stale_graph_source_count", 0),
             "pass": integrity_pass,
         },

@@ -66,6 +66,8 @@ SOURCE_SUFFIXES = {
 TEST_SUFFIXES = {".bats"}
 DOCUMENT_SUFFIXES = {".adoc", ".md", ".rst"}
 CONFIG_SUFFIXES = {".cfg", ".ini", ".json", ".toml", ".yaml", ".yml"}
+CONTRACT_SUFFIXES = {".avsc", ".gql", ".graphql", ".proto", ".sql"}
+BUILD_SUFFIXES = {".csproj", ".fsproj", ".gradle", ".vbproj"}
 SPECIAL_FILES = {
     "Dockerfile",
     "Makefile",
@@ -78,6 +80,16 @@ SPECIAL_FILES = {
     "requirements.txt",
     "Cargo.lock",
     "Cargo.toml",
+    "Gemfile",
+    "Package.swift",
+    "Rakefile",
+    "build.gradle",
+    "build.gradle.kts",
+    "composer.json",
+    "mix.exs",
+    "pom.xml",
+    "settings.gradle",
+    "settings.gradle.kts",
 }
 INTENT_NAME_RE = re.compile(
     r"(?:^|[-_.])(readme|architecture|adr|design|specification|spec|plan|status|roadmap|contributing)(?:$|[-_.])",
@@ -123,7 +135,7 @@ def relevant_files(subject: Path) -> list[Path]:
         )
         if fixture_manifest:
             continue
-        if suffix in SOURCE_SUFFIXES | TEST_SUFFIXES | DOCUMENT_SUFFIXES or config_bearing or path.name in SPECIAL_FILES:
+        if suffix in SOURCE_SUFFIXES | TEST_SUFFIXES | DOCUMENT_SUFFIXES | CONTRACT_SUFFIXES | BUILD_SUFFIXES or config_bearing or path.name in SPECIAL_FILES:
             found.append(path)
             continue
         try:
@@ -171,6 +183,15 @@ def language(path: Path) -> str:
         ".ts": "typescript",
         ".tsx": "typescript",
         ".zsh": "shell",
+        ".avsc": "avro",
+        ".gql": "graphql",
+        ".graphql": "graphql",
+        ".proto": "protobuf",
+        ".sql": "sql",
+        ".csproj": "msbuild",
+        ".fsproj": "msbuild",
+        ".gradle": "gradle",
+        ".vbproj": "msbuild",
     }.get(suffix, "other")
 
 
@@ -202,6 +223,8 @@ def classify(path_value: str, path: Path) -> str:
         return "source_file"
     if path.suffix.lower() in DOCUMENT_SUFFIXES:
         return "documentation"
+    if path.suffix.lower() in CONTRACT_SUFFIXES:
+        return "contract_source"
     return "configuration"
 
 
