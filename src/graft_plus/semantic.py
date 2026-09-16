@@ -1,0 +1,334 @@
+"""Generated inventory Ajenda already proved: migrations, tables, egress, routes.
+
+Ported from 1devteam/ajenda-ai scripts/validation/graph_semantic_inventory.py.
+Ajenda overlay policy (RLS completeness, governed egress) stays overlay.
+This module emits source-backed facts only.
+"""
+
+from __future__ import annotations
+
+import ast
+import re
+from collections import defaultdict
+from pathlib import Path
+from typing import Any
+from urllib.parse import urlparse
+
+_RLS_ENABLE_RE = re.compile(r"ALTER\s+TABLE\s+([A-Za-z0-9_]+)\s+ENABLE\s+ROW\s+LEVEL\s+SECURITY", re.I)
+_RLS_FORCE_RE = re.compile(r"ALTER\s+TABLE\s+([A-Za-z0-9_]+)\s+FORCE\s+ROW\s+LEVEL\s+SECURITY", re.I)
+_POLICY_RE = re.compile(r"CREATE\s+POLICY\s+([A-Za-z0-9_]+)\s+ON\s+([A-Za-z0-9_]+)", re.I)
+_HTTP_METHODS = frozenset({"get", "post", "put", "patch", "delete", "request", "head", "options"})
+_NETWORK_LIBRARIES = frozenset({"httpx", "requests", "smtplib", "aiohttp"})
+_ROUTE_METHODS = frozenset({"get", "post", "put", "patch", "delete", "head", "options", "websocket"})
+_SKIP = {".git", "node_modules", "dist", "build", ".venv", "venv", "__pycache__"}
+
+
+def _rel(subject: Path, path: Path) -> str:
+    return str(path.relative_to(subject)).replace("\\", "/")
+
+
+def _skip(path: Path) -> bool:
+    return any(part in _SKIP for part in path.parts)
+
+
+def _production_py(subject: Path) -> list[Path]:
+    files: list[Path] = []
+    for path in subject.rglob("*.py"):
+        if _skip(path):
+            continue
+        rel = _rel(subject, path)
+        if rel.startswith("tests/") or "/fixtures/" in rel:
+            continue
+        files.append(path)
+    return sorted(files)
+
+
+def _module_for_path(subject: Path, path: Path) -> str:
+    rel = path.relative_to(subject).with_suffix("")
+    parts = list(rel.parts)
+    if parts and parts[0] == "src":
+        parts = parts[1:]
+    if parts and parts[-1] == "__init__":
+        parts = parts[:-1]
+    return ".".join(parts)
+
+
+def _call_name(node: ast.AST) -> str | None:
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        prefix = _call_name(node.value)
+        return f"{prefix}.{node.attr}" if prefix else node.attr
+    return None
+
+
+def _literal_string(node: ast.AST | None) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    return None
+
+
+def _migration_table_changes(tree: ast.Module) -> dict[str, set[str]]:
+    tables: dict[str, set[str]] = defaultdict(set)
+    for item in ast.walk(tree):
+        if not isinstance(item, ast.Call):
+            continue
+        call_name = _call_name(item.func)
+        if call_name == "op.create_table" and item.args:
+            table = _literal_string(item.args[0])
+            if not table:
+                continue
+            tables.setdefault(table, set())
+            for argument in item.args[1:]:
+                if not isinstance(argument, ast.Call):
+                    continue
+                if _call_name(argument.func) not in {"sa.Column", "sqlalchemy.Column"} or not argument.args:
+                    continue
+                column = _literal_string(argument.args[0])
+                if column:
+                    tables[table].add(column)
+        elif call_name == "op.add_column" and len(item.args) >= 2:
+            table = _literal_string(item.args[0])
+            column_call = item.args[1]
+            if not table or not isinstance(column_call, ast.Call):
+                continue
+            if _call_name(column_call.func) not in {"sa.Column", "sqlalchemy.Column"} or not column_call.args:
+                continue
+            column = _literal_string(column_call.args[0])
+            if column:
+                tables[table].add(column)
+    return dict(tables)
+
+
+def _record_rls_sql(sql: str, *, enabled: set[str], forced: set[str], policies: dict[str, set[str]]) -> None:
+    enabled.update(match.group(1) for match in _RLS_ENABLE_RE.finditer(sql))
+    forced.update(match.group(1) for match in _RLS_FORCE_RE.finditer(sql))
+    for match in _POLICY_RE.finditer(sql):
+        policies[match.group(2)].add(match.group(1))
+
+
+def collect_migrations(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    touched: dict[str, set[str]] = defaultdict(set)
+    columns: dict[str, set[str]] = defaultdict(set)
+    enabled: set[str] = set()
+    forced: set[str] = set()
+    policies: dict[str, set[str]] = defaultdict(set)
+    for root in (subject / "alembic" / "versions", subject / "migrations" / "versions"):
+        if not root.is_dir():
+            continue
+        for path in sorted(root.glob("*.py")):
+            if _skip(path):
+                continue
+            rel = _rel(subject, path)
+            text = path.read_text(encoding="utf-8")
+            try:
+                tree = ast.parse(text, filename=rel)
+            except (OSError, SyntaxError):
+                continue
+            table_changes = _migration_table_changes(tree)
+            migration_enabled: set[str] = set()
+            migration_forced: set[str] = set()
+            migration_policies: dict[str, set[str]] = defaultdict(set)
+            _record_rls_sql(text, enabled=migration_enabled, forced=migration_forced, policies=migration_policies)
+            enabled.update(migration_enabled)
+            forced.update(migration_forced)
+            for table, names in migration_policies.items():
+                policies[table].update(names)
+            migration_tables = set(table_changes) | migration_enabled | migration_forced | set(migration_policies)
+            migration_id = f"migration:{path.stem}"
+            nodes.append({"id": migration_id, "type": "migration", "source": rel, "layer": "generated"})
+            for table in sorted(migration_tables):
+                edges.append(
+                    {
+                        "from": migration_id,
+                        "to": f"db:table:{table}",
+                        "type": "creates_or_alters_table",
+                        "evidence": rel,
+                        "layer": "generated",
+                    }
+                )
+                touched[table].add(rel)
+            for table, cols in table_changes.items():
+                columns[table].update(cols)
+    for table in sorted(set(columns) | set(touched)):
+        sources = sorted(touched.get(table, set()))
+        nodes.append(
+            {
+                "id": f"db:table:{table}",
+                "type": "database_table",
+                "label": table,
+                "source": sources[-1] if sources else None,
+                "layer": "generated",
+                "columns": sorted(columns.get(table, set())),
+                "rls_enabled": table in enabled,
+                "rls_forced": table in forced,
+                "rls_policies": sorted(policies.get(table, set())),
+            }
+        )
+    return nodes, edges
+
+
+def _network_import_aliases(tree: ast.Module) -> dict[str, str]:
+    aliases: dict[str, str] = {}
+    for item in tree.body:
+        if isinstance(item, ast.Import):
+            for alias in item.names:
+                root = alias.name.split(".", 1)[0]
+                if root in _NETWORK_LIBRARIES:
+                    aliases[alias.asname or root] = root
+        elif isinstance(item, ast.ImportFrom) and item.module:
+            root = item.module.split(".", 1)[0]
+            if root in _NETWORK_LIBRARIES:
+                for alias in item.names:
+                    aliases[alias.asname or alias.name] = f"{root}.{alias.name}"
+    return aliases
+
+
+def _network_calls(tree: ast.Module) -> list[dict[str, Any]]:
+    aliases = _network_import_aliases(tree)
+    if not aliases:
+        return []
+    client_vars: set[str] = set()
+    calls: list[dict[str, Any]] = []
+    for item in ast.walk(tree):
+        if not isinstance(item, (ast.Assign, ast.AnnAssign)):
+            continue
+        value = item.value
+        if not isinstance(value, ast.Call):
+            continue
+        name = _call_name(value.func) or ""
+        root_alias = name.split(".", 1)[0]
+        resolved = name.replace(root_alias, aliases.get(root_alias, root_alias), 1)
+        if not resolved.startswith(
+            ("httpx.Client", "httpx.AsyncClient", "requests.Session", "smtplib.SMTP", "aiohttp.ClientSession")
+        ):
+            continue
+        targets = item.targets if isinstance(item, ast.Assign) else [item.target]
+        client_vars.update(target.id for target in targets if isinstance(target, ast.Name))
+    for item in ast.walk(tree):
+        if not isinstance(item, ast.Call):
+            continue
+        name = _call_name(item.func) or ""
+        parts = name.split(".")
+        root = parts[0] if parts else ""
+        resolved_root = aliases.get(root, root)
+        kind: str | None = None
+        if resolved_root in _NETWORK_LIBRARIES and len(parts) >= 2 and parts[-1].lower() in _HTTP_METHODS:
+            kind = f"{resolved_root}.{parts[-1].lower()}"
+        elif root in client_vars and len(parts) >= 2 and parts[-1].lower() in _HTTP_METHODS:
+            kind = f"client.{parts[-1].lower()}"
+        elif resolved_root == "smtplib" and len(parts) >= 2 and parts[-1] in {"SMTP", "SMTP_SSL"}:
+            kind = f"smtplib.{parts[-1]}"
+        if kind is None:
+            continue
+        literal_urls: list[str] = []
+        arguments = [*item.args, *(keyword.value for keyword in item.keywords)]
+        for argument in arguments:
+            for descendant in ast.walk(argument):
+                value = _literal_string(descendant)
+                if value and value.startswith(("https://", "http://")):
+                    literal_urls.append(value)
+        hosts = sorted({h for url in literal_urls if (h := (urlparse(url).hostname or "").lower().strip())})
+        calls.append({"kind": kind, "line": getattr(item, "lineno", None), "hosts": hosts})
+    return sorted(calls, key=lambda item: (int(item["line"] or 0), str(item["kind"])))
+
+
+def collect_egress(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    for path in _production_py(subject):
+        rel = _rel(subject, path)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=rel)
+        except (OSError, SyntaxError):
+            continue
+        calls = _network_calls(tree)
+        if not calls:
+            continue
+        module = _module_for_path(subject, path)
+        sink_id = f"egress:{module}"
+        hosts = sorted({host for call in calls for host in call.get("hosts", [])})
+        nodes.append(
+            {
+                "id": sink_id,
+                "type": "network_egress_sink",
+                "source": rel,
+                "layer": "generated",
+                "calls": calls,
+                "hosts": hosts,
+                "classification": "unclassified",
+            }
+        )
+        edges.append(
+            {
+                "from": f"py:{module}",
+                "to": sink_id,
+                "type": "network_call",
+                "evidence": rel,
+                "layer": "generated",
+            }
+        )
+    return nodes, edges
+
+
+def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    nodes: list[dict[str, Any]] = []
+    edges: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for path in _production_py(subject):
+        rel = _rel(subject, path)
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"), filename=rel)
+        except (OSError, SyntaxError):
+            continue
+        module = _module_for_path(subject, path)
+        for item in ast.walk(tree):
+            if not isinstance(item, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for decorator in item.decorator_list:
+                if not isinstance(decorator, ast.Call):
+                    continue
+                name = (_call_name(decorator.func) or "").lower()
+                method = name.rsplit(".", 1)[-1]
+                if method not in _ROUTE_METHODS:
+                    continue
+                path_lit = _literal_string(decorator.args[0]) if decorator.args else None
+                if not path_lit:
+                    continue
+                route_id = f"route:{method.upper()} {path_lit}"
+                if route_id in seen:
+                    continue
+                seen.add(route_id)
+                nodes.append(
+                    {
+                        "id": route_id,
+                        "type": "http_route",
+                        "source": rel,
+                        "layer": "generated",
+                        "method": method.upper(),
+                        "path": path_lit,
+                        "handler": item.name,
+                    }
+                )
+                edges.append(
+                    {
+                        "from": f"py:{module}",
+                        "to": route_id,
+                        "type": "exposes_route",
+                        "evidence": rel,
+                        "layer": "generated",
+                    }
+                )
+    return nodes, edges
+
+
+def collect_semantic(subject: Path) -> dict[str, Any]:
+    mig_nodes, mig_edges = collect_migrations(subject)
+    egress_nodes, egress_edges = collect_egress(subject)
+    route_nodes, route_edges = collect_routes(subject)
+    return {
+        "nodes": [*mig_nodes, *egress_nodes, *route_nodes],
+        "edges": [*mig_edges, *egress_edges, *route_edges],
+    }

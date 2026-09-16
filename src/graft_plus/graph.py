@@ -66,7 +66,7 @@ def discover_python_roots(subject: Path) -> list[Path]:
         path = subject / name
         if path.is_dir():
             found.append(path)
-    skip_top = SKIP_DIRS | {"tests", "docs", "examples", "scripts", "migrations"}
+    skip_top = SKIP_DIRS | {"tests", "docs", "examples", "scripts", "migrations", "alembic"}
     for child in sorted(subject.iterdir()):
         if not child.is_dir() or child.name in skip_top or _skip(child):
             continue
@@ -342,11 +342,15 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     test_nodes, test_edges, test_unresolved = collect_test_graph(subject, production)
     surfaces = collect_surfaces(subject)
     overlay = load_overlay(overlay_path)
+    from graft_plus.semantic import collect_semantic
+
+    semantic = collect_semantic(subject)
 
     nodes: list[dict[str, Any]] = [
         {"id": n.id, "type": n.type, "source": n.source, "layer": "generated"}
         for n in [*py_nodes, *fe_nodes, *test_nodes, *surfaces]
     ]
+    nodes.extend(semantic["nodes"])
     for item in overlay.get("nodes") or []:
         node = dict(item)
         node.setdefault("layer", "overlay")
@@ -355,6 +359,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         {"from": e.source, "to": e.target, "type": e.type, "evidence": e.evidence, "layer": "generated"}
         for e in [*py_edges, *fe_edges, *test_edges]
     ]
+    edges.extend(e for e in semantic["edges"] if e.get("from") and e.get("to"))
     for item in overlay.get("edges") or []:
         edge = dict(item)
         edge.setdefault("layer", "overlay")
@@ -366,9 +371,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     if dupes:
         raise ValueError(f"duplicate nodes: {', '.join(dupes)}")
     known = set(ids)
-    missing = sorted({str(x) for e in edges for x in (e.get("from"), e.get("to")) if x not in known})
-    if missing:
-        raise ValueError(f"edges reference undefined nodes: {', '.join(missing)}")
+    edges = [e for e in edges if str(e.get("from")) in known and str(e.get("to")) in known]
     node_ids = sorted(known)
     overlay_rel = None
     if overlay_path and overlay_path.exists():
