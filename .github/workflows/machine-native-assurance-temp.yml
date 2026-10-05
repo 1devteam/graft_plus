@@ -7,7 +7,6 @@ permissions:
   contents: write
 jobs:
   upgrade:
-    if: github.event.head_commit.message == 'chore: run machine-native assurance upgrade'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,31 +15,19 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Apply derived system transformation
+      - name: Apply validate and commit coherent upgrade
         run: |
+          if [ "$(git log -1 --pretty=%s)" != "chore: run machine-native assurance upgrade" ]; then
+            echo "not an upgrade trigger; exiting cleanly"
+            exit 0
+          fi
           python tools/apply_machine_native_assurance.py
           python tools/fix_machine_native_compat.py
-      - name: Validate repository and reconstructed self-model
-        run: |
           python -m pip install -e '.[dev]'
           pytest
           rm -rf /tmp/graft-self
           graft-plus reconstruct --repo-path . --out /tmp/graft-self
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          out = Path('/tmp/graft-self')
-          complete = json.loads((out / 'graph-completeness-report.json').read_text())
-          decision = json.loads((out / 'graph-architecture-decision.json').read_text())
-          assert complete['identity_integrity_pass'] is True
-          assert complete['identity_collision_count'] == 0
-          assert 'dimensions' in decision['decision']
-          assert decision['decision']['merge_authorization'] == 'not-determined'
-          assert decision['grants_execution_authority'] is False
-          print(json.dumps({'nodes': complete['node_count'], 'edges': complete['edge_count'], 'disposition': decision['decision']['architecture_disposition'], 'dimensions': decision['decision']['dimensions']}, indent=2))
-          PY
-      - name: Commit coherent upgrade
-        run: |
+          python -c "import json; from pathlib import Path; out=Path('/tmp/graft-self'); c=json.loads((out/'graph-completeness-report.json').read_text()); d=json.loads((out/'graph-architecture-decision.json').read_text()); assert c['identity_integrity_pass'] is True; assert c['identity_collision_count'] == 0; assert 'dimensions' in d['decision']; assert d['decision']['merge_authorization'] == 'not-determined'; assert d['grants_execution_authority'] is False; print(json.dumps({'nodes':c['node_count'],'edges':c['edge_count'],'disposition':d['decision']['architecture_disposition'],'dimensions':d['decision']['dimensions']}, indent=2))"
           git config user.name '1devteam'
           git config user.email 'inmo.ai@outlook.com'
           git add src/graft_plus/semantic.py src/graft_plus/completeness.py src/graft_plus/decision.py tests/test_machine_native_assurance.py tests/test_reconstruct.py docs/ASSURANCE.md
