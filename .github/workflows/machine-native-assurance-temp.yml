@@ -7,6 +7,7 @@ permissions:
   contents: write
 jobs:
   upgrade:
+    if: github.event.head_commit.message == 'chore: run machine-native assurance upgrade'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,7 +17,9 @@ jobs:
         with:
           python-version: '3.12'
       - name: Apply derived system transformation
-        run: python tools/apply_machine_native_assurance.py
+        run: |
+          python tools/apply_machine_native_assurance.py
+          python tools/fix_machine_native_compat.py
       - name: Validate repository and reconstructed self-model
         run: |
           python -m pip install -e '.[dev]'
@@ -41,6 +44,5 @@ jobs:
           git config user.name '1devteam'
           git config user.email 'inmo.ai@outlook.com'
           git add src/graft_plus/semantic.py src/graft_plus/completeness.py src/graft_plus/decision.py tests/test_machine_native_assurance.py tests/test_reconstruct.py docs/ASSURANCE.md
-          if git diff --cached --quiet; then exit 0; fi
           git commit -m 'feat: make reconstruction assurance machine-native'
           git push origin HEAD:feat/machine-native-assurance-20261005
