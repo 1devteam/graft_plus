@@ -367,6 +367,11 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
                     continue
                 if last not in _ROUTE_METHODS or not path_lit:
                     continue
+                owner = name.rsplit(".", 1)[0] if "." in name else ""
+                if not owner or not path_lit.startswith("/"):
+                    continue
+                if owner in {"mock", "unittest.mock"} or owner.endswith(".mock"):
+                    continue
                 add_route(
                     last,
                     path_lit,

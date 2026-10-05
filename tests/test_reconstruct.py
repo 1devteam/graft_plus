@@ -53,7 +53,7 @@ def test_frozen_negatives_cannot_grant_authority():
     completeness = {**completeness, "integrity_pass": True, "unacknowledged_blocking_findings": []}
     impact = analyze_impact(graph, [])
     decision = decide(graph=graph, impact=impact, completeness=completeness)
-    assert decision["decision"]["architecture_disposition"] == "clear"
+    assert decision["decision"]["architecture_disposition"] == "review-required"
     assert decision["decision"]["merge_authorization"] == "not-determined"
     assert decision["grants_execution_authority"] is False
 
@@ -213,6 +213,6 @@ def test_completeness_ratchet_acknowledgement_is_not_repair():
     finding = next(item for item in known["semantic_findings"] if item["id"] == "rls-missing:users")
     assert finding["acknowledged"] is True
     passed = decide(graph=graph, impact={"changed_files": []}, completeness=known)
-    assert passed["decision"]["architecture_disposition"] == "clear"
+    assert passed["decision"]["architecture_disposition"] == "review-required"
     assert "known_violations_visible" in passed["decision"]["review_reasons"]
     assert passed["decision"]["merge_authorization"] == "not-determined"

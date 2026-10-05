@@ -1,4 +1,4 @@
-"""Compose the decipher pack. Never grants merge or execution."""
+"""Project reconstruction evidence into independent assurance propositions."""
 
 from __future__ import annotations
 
@@ -24,54 +24,82 @@ def _ids(items: list[Any]) -> list[str]:
 
 
 def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[str, Any]) -> dict[str, Any]:
-    blocking = list((completeness.get("integrity") or {}).get("unacknowledged_blocking_findings") or completeness.get("unacknowledged_blocking_findings") or [])
+    integrity = completeness.get("integrity") or {}
     residuals = completeness.get("residuals") or {}
-    review = []
-    if impact.get("unmapped_changed_file_count"):
+    blocking = list(integrity.get("unacknowledged_blocking_findings") or completeness.get("unacknowledged_blocking_findings") or [])
+    collisions = int(completeness.get("identity_collision_count") or integrity.get("identity_collision_count") or 0)
+    identity_pass = bool(completeness.get("identity_integrity_pass", integrity.get("identity_integrity_pass", not collisions)))
+    artifact_pass = bool(completeness.get("integrity_pass") if "integrity_pass" in completeness else integrity.get("pass"))
+
+    structural_gaps = []
+    for key, reason in (("unmapped_source_file_count", "unmapped_source_files"), ("relationship_unparsed_file_count", "relationship_unparsed_files"), ("unresolved_relationship_boundary_count", "runtime_or_build_context_required"), ("unresolved_import_count", "unresolved_references"), ("stale_graph_source_count", "stale_graph_sources")):
+        if residuals.get(key):
+            structural_gaps.append(reason)
+
+    changed_files = list(impact.get("changed_files") or [])
+    unmapped_changed = list(impact.get("unmapped_changed_files") or [])
+    known_violations = list(integrity.get("known_violations") or [])
+
+    dimensions = {
+        "artifact_integrity": "passed" if artifact_pass else "blocked",
+        "identity_integrity": "passed" if identity_pass else "blocked",
+        "structural_coverage": "gaps-visible" if structural_gaps else "no-known-gaps",
+        "architectural_reconstruction": "bounded" if not structural_gaps and artifact_pass else "incomplete",
+        "change_evidence": "not-requested" if not changed_files else ("partial" if unmapped_changed else "available"),
+        "proof_readiness": "not-established",
+        "execution_authority": "not-granted",
+        "merge_authority": MERGE_AUTHORIZATION,
+    }
+
+    review = list(structural_gaps)
+    if unmapped_changed:
         review.append("unmapped_changed_files")
-    if residuals.get("unmapped_source_files"):
-        review.append("unmapped_source_files")
-    if residuals.get("relationship_unparsed_files"):
-        review.append("partial_relationship_coverage")
-    if residuals.get("unresolved_relationship_boundary_count"):
-        review.append("runtime_or_build_context_required")
-    if residuals.get("stale_graph_sources"):
-        review.append("stale_graph_sources")
-    if (completeness.get("integrity") or {}).get("known_violations"):
+    if known_violations:
         review.append("known_violations_visible")
-    warnings = []
-    if residuals.get("no_git_range"):
-        warnings.append("no_git_range")
-    if residuals.get("unresolved_package_roots"):
-        warnings.append("unresolved_imports")
-    integrity_pass = bool(completeness.get("integrity_pass") if "integrity_pass" in completeness else (completeness.get("integrity") or {}).get("pass"))
-    if not integrity_pass or blocking:
+    if not changed_files:
+        review.append("no_git_range")
+    review = sorted(set(review))
+
+    if not artifact_pass or not identity_pass or blocking:
         disposition = "blocked"
-    elif impact.get("unmapped_changed_file_count"):
+    elif review:
         disposition = "review-required"
     else:
         disposition = "clear"
+
+    blocking_reasons = list(blocking)
+    if not identity_pass:
+        blocking_reasons.append("canonical_identity_collision")
+    if completeness.get("undefined_edge_endpoints"):
+        blocking_reasons.append("undefined_edge_endpoints")
+    if integrity.get("missing_semantic_edge_evidence"):
+        blocking_reasons.append("missing_semantic_edge_evidence")
+
     return {
-        "schema_version": "1.1",
+        "schema_version": "1.2",
         "product": PRODUCT,
         "package": PACKAGE,
         "role": "fact-substrate",
         "decision": {
             "architecture_disposition": disposition,
+            "dimensions": dimensions,
             "merge_authorization": MERGE_AUTHORIZATION,
             "full_ci_required": True,
-            "blocking_reasons": blocking + (["undefined_edge_endpoints"] if not completeness.get("integrity_pass") else []),
+            "blocking_reasons": sorted(set(blocking_reasons)),
             "review_reasons": review,
-            "warnings": warnings,
+            "warnings": ["unresolved_references_classified"] if residuals.get("unresolved_import_classes") else [],
         },
         "grants_execution_authority": GRANTS_EXECUTION_AUTHORITY,
         "implementsPlan": IMPLEMENTS_PLAN,
         "completeness": {
             "integrity_pass": completeness.get("integrity_pass"),
+            "identity_integrity_pass": identity_pass,
+            "identity_collision_count": collisions,
+            "duplicate_node_ids": completeness.get("duplicate_node_ids") or integrity.get("duplicate_node_ids") or [],
             "undefined_edge_endpoints": completeness.get("undefined_edge_endpoints") or [],
             "unacknowledged_blocking_findings": blocking,
             "acknowledged_semantic_findings": completeness.get("acknowledged_findings") or [],
-            "missing_semantic_edge_evidence": (completeness.get("integrity") or {}).get("missing_semantic_edge_evidence") or [],
+            "missing_semantic_edge_evidence": integrity.get("missing_semantic_edge_evidence") or [],
             "semantic_reconciliation_counts": completeness.get("semantic_reconciliation_counts") or {},
             "unmapped_source_files": residuals.get("unmapped_source_files") or [],
             "stale_graph_sources": residuals.get("stale_graph_sources") or [],
@@ -79,6 +107,8 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
             "relationship_boundary_count": residuals.get("relationship_boundary_count") or 0,
             "unresolved_relationship_boundary_count": residuals.get("unresolved_relationship_boundary_count") or 0,
             "relationship_boundary_counts_by_kind": residuals.get("relationship_boundary_counts_by_kind") or {},
+            "unresolved_import_count": residuals.get("unresolved_import_count") or 0,
+            "unresolved_import_classes": residuals.get("unresolved_import_classes") or {},
             "evidence_precision_counts": residuals.get("evidence_precision_counts") or {},
             "contract_source_count": residuals.get("contract_source_count") or 0,
             "contract_declaration_count": residuals.get("contract_declaration_count") or 0,
@@ -89,9 +119,9 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
         },
         "residuals": residuals,
         "impact": {
-            "changed_files": impact.get("changed_files") or [],
+            "changed_files": changed_files,
             "changed_node_ids": _ids(impact.get("changed_nodes") or []),
-            "unmapped_changed_files": impact.get("unmapped_changed_files") or [],
+            "unmapped_changed_files": unmapped_changed,
             "upstream_consumers": _ids(impact.get("upstream_consumers") or []),
             "downstream_dependencies": _ids(impact.get("downstream_dependencies") or []),
             "affected_semantic_node_ids": _ids(impact.get("affected_semantic_nodes") or []),
@@ -99,16 +129,14 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
             "impacted_tests": impact.get("impacted_tests") or [],
             "relevant_invariant_ids": _ids(impact.get("relevant_invariants") or []),
         },
-        "inputs": {
-            "canonical_graph_sha256": _sha(graph),
-            "metrics": graph.get("metrics") or {},
-        },
+        "inputs": {"canonical_graph_sha256": _sha(graph), "metrics": graph.get("metrics") or {}},
         "negatives": [
             "This pack is a map. It is not a plan.",
+            "No single disposition substitutes for the independent assurance dimensions.",
             "merge_authorization is not-determined even when disposition is clear.",
             "An acknowledgement is not a repair.",
-            "Do not invent missing nodes.",
-            "Unresolved imports are facts, not missing files.",
+            "Do not invent missing nodes or unresolved targets.",
+            "Unresolved references are classified residual evidence, not proof of missing files.",
             "Overlay stays residual until a reviewed relationship is attached.",
         ],
     }
