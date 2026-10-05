@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from graft_plus.adapters import collect_javascript_graph, collect_shell_graph
+from graft_plus.architecture import collect_architecture_topology
 from graft_plus.boundaries import collect_relationship_boundaries
 from graft_plus.configuration import collect_configuration_graph
 from graft_plus.contracts import collect_contract_file_graph
@@ -340,6 +341,15 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     )
     nodes.extend(configuration_nodes)
     edges.extend(configuration_edges)
+    architecture_nodes, architecture_edges, architecture_facts, architecture_annotations = collect_architecture_topology(
+        subject, nodes
+    )
+    for node in nodes:
+        annotation = architecture_annotations.get(str(node.get("id") or ""))
+        if annotation:
+            node.update(annotation)
+    nodes.extend(architecture_nodes)
+    edges.extend(architecture_edges)
     mapped_sources = {
         str(node["source"])
         for node in nodes
@@ -415,7 +425,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             overlay_rel = str(overlay_path)
     overlay_count = sum(1 for n in nodes if n.get("layer") == "overlay")
     return {
-        "schema_version": "1.6",
+        "schema_version": "1.7",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -441,6 +451,11 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
                 "relationship-boundary-ledger",
                 "contract-declarations",
                 "configuration-deployment",
+                "subsystem-hierarchy",
+                "build-system-topology",
+                "source-provenance",
+                "cross-language-subsystem-joins",
+                "governance-boundaries",
                 "evidence-anchors",
             ],
             "function_roots": overlay.get("function_roots") or [],
@@ -457,6 +472,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             **boundary_facts,
             **contract_file_facts,
             **configuration_facts,
+            **architecture_facts,
             "evidence_precision_counts": evidence_precision_counts,
         },
         "metrics": {
@@ -478,6 +494,12 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             "contract_declaration_count": contract_file_facts["contract_declaration_count"],
             "configuration_key_count": configuration_facts["configuration_key_count"],
             "deployment_fact_count": configuration_facts["deployment_fact_count"],
+            "subsystem_count": architecture_facts["subsystem_count"],
+            "cross_language_subsystem_count": architecture_facts["cross_language_subsystem_count"],
+            "build_definition_count": architecture_facts["build_definition_count"],
+            "build_input_edge_count": architecture_facts["build_input_edge_count"],
+            "governance_boundary_count": architecture_facts["governance_boundary_count"],
+            "source_provenance_counts": architecture_facts["source_provenance_counts"],
             "evidence_precision_counts": evidence_precision_counts,
         },
     }

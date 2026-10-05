@@ -210,6 +210,19 @@ def collect_architecture_topology(
         and node.get("source")
     ]
     source_paths = sorted({str(node["source"]) for node in file_level_nodes})
+    if not source_paths and not controls:
+        return [], [], {
+            "subsystem_count": 0,
+            "subsystem_direct_member_counts": {},
+            "cross_language_subsystem_count": 0,
+            "cross_language_subsystems": [],
+            "build_definition_count": 0,
+            "build_definition_counts_by_system": {},
+            "build_input_edge_count": 0,
+            "governance_boundary_count": 0,
+            "governance_boundary_counts_by_kind": {},
+            "source_provenance_counts": {},
+        }, {}
     subsystem_paths: set[str] = {"."}
     for source in source_paths:
         parts = Path(source).parts
