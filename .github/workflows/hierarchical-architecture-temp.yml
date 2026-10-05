@@ -23,6 +23,7 @@ jobs:
           fi
           python tools/apply_hierarchical_architecture.py
           python tools/fix_hierarchical_compat.py
+          python tools/extend_build_controls.py
           python -m pip install -e '.[dev]'
           pytest
           rm -rf /tmp/graft-self
