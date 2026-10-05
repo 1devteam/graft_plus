@@ -26,7 +26,7 @@ jobs:
           python -m pip install -e '.[dev]'
           pytest
           rm -rf /tmp/graft-self
-          graft-plus reconstruct --repo-path . --out /tmp/graft-self
+          python -c "from pathlib import Path; from graft_plus.cli import reconstruct; raise SystemExit(reconstruct(Path('.'), Path('/tmp/graft-self'), None, None, None))"
           python -c "import json; from pathlib import Path; out=Path('/tmp/graft-self'); c=json.loads((out/'graph-completeness-report.json').read_text()); d=json.loads((out/'graph-architecture-decision.json').read_text()); assert c['identity_integrity_pass'] is True; assert c['identity_collision_count'] == 0; assert 'dimensions' in d['decision']; assert d['decision']['merge_authorization'] == 'not-determined'; assert d['grants_execution_authority'] is False; print(json.dumps({'nodes':c['node_count'],'edges':c['edge_count'],'disposition':d['decision']['architecture_disposition'],'dimensions':d['decision']['dimensions']}, indent=2))"
           git config user.name '1devteam'
           git config user.email 'inmo.ai@outlook.com'
