@@ -18,6 +18,9 @@ SOURCE_NODE_PREFIXES = ("py:", "js:", "sh:", "fn:")
 
 TYPE_BOUNDARY = {
     "runtime": "runtime",
+    "subsystem": "subsystem",
+    "build_definition": "build-system",
+    "governance_boundary": "governance",
     "security_boundary": "security-boundary",
     "external_service": "external",
     "frontend_module": "frontend",
@@ -350,6 +353,16 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
         "deployment_fact_counts_by_kind": dict(
             (graph.get("facts") or {}).get("deployment_fact_counts_by_kind") or {}
         ),
+        "subsystem_count": int((graph.get("facts") or {}).get("subsystem_count") or 0),
+        "subsystem_direct_member_counts": dict((graph.get("facts") or {}).get("subsystem_direct_member_counts") or {}),
+        "cross_language_subsystem_count": int((graph.get("facts") or {}).get("cross_language_subsystem_count") or 0),
+        "cross_language_subsystems": list((graph.get("facts") or {}).get("cross_language_subsystems") or []),
+        "build_definition_count": int((graph.get("facts") or {}).get("build_definition_count") or 0),
+        "build_definition_counts_by_system": dict((graph.get("facts") or {}).get("build_definition_counts_by_system") or {}),
+        "build_input_edge_count": int((graph.get("facts") or {}).get("build_input_edge_count") or 0),
+        "governance_boundary_count": int((graph.get("facts") or {}).get("governance_boundary_count") or 0),
+        "governance_boundary_counts_by_kind": dict((graph.get("facts") or {}).get("governance_boundary_counts_by_kind") or {}),
+        "source_provenance_counts": dict((graph.get("facts") or {}).get("source_provenance_counts") or {}),
         "stale_graph_source_count": coverage.get("stale_graph_source_count", 0),
         "stale_graph_sources": coverage.get("stale_graph_sources") or [],
         "known_violations": known_violations,
@@ -357,7 +370,7 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
         "note": "Residuals stay visible. An acknowledgement is not a repair. Overlay stays residual until a reviewed relationship is attached.",
     }
     return {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "integrity_pass": integrity_pass,
         "identity_integrity_pass": not duplicate_node_ids,
         "duplicate_node_ids": duplicate_node_ids,

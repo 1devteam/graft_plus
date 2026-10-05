@@ -76,7 +76,7 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
         blocking_reasons.append("missing_semantic_edge_evidence")
 
     return {
-        "schema_version": "1.2",
+        "schema_version": "1.3",
         "product": PRODUCT,
         "package": PACKAGE,
         "role": "fact-substrate",
@@ -116,6 +116,16 @@ def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[
             "configuration_key_count": residuals.get("configuration_key_count") or 0,
             "deployment_fact_count": residuals.get("deployment_fact_count") or 0,
             "deployment_fact_counts_by_kind": residuals.get("deployment_fact_counts_by_kind") or {},
+            "subsystem_count": residuals.get("subsystem_count") or 0,
+            "subsystem_direct_member_counts": residuals.get("subsystem_direct_member_counts") or {},
+            "cross_language_subsystem_count": residuals.get("cross_language_subsystem_count") or 0,
+            "cross_language_subsystems": residuals.get("cross_language_subsystems") or [],
+            "build_definition_count": residuals.get("build_definition_count") or 0,
+            "build_definition_counts_by_system": residuals.get("build_definition_counts_by_system") or {},
+            "build_input_edge_count": residuals.get("build_input_edge_count") or 0,
+            "governance_boundary_count": residuals.get("governance_boundary_count") or 0,
+            "governance_boundary_counts_by_kind": residuals.get("governance_boundary_counts_by_kind") or {},
+            "source_provenance_counts": residuals.get("source_provenance_counts") or {},
         },
         "residuals": residuals,
         "impact": {

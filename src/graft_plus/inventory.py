@@ -67,8 +67,46 @@ TEST_SUFFIXES = {".bats"}
 DOCUMENT_SUFFIXES = {".adoc", ".md", ".rst"}
 CONFIG_SUFFIXES = {".cfg", ".ini", ".json", ".toml", ".yaml", ".yml"}
 CONTRACT_SUFFIXES = {".avsc", ".gql", ".graphql", ".proto", ".sql"}
-BUILD_SUFFIXES = {".csproj", ".fsproj", ".gradle", ".vbproj"}
+BUILD_SUFFIXES = {".bazel", ".bzl", ".cmake", ".csproj", ".fsproj", ".gn", ".gni", ".gradle", ".ninja", ".vbproj"}
+BUILD_FILES = {
+    ".gn",
+    "BUILD",
+    "BUILD.bazel",
+    "BUILD.gn",
+    "CMakeLists.txt",
+    "Cargo.lock",
+    "Cargo.toml",
+    "DEPS",
+    "GNUmakefile",
+    "Gemfile",
+    "Makefile",
+    "MODULE.bazel",
+    "Package.swift",
+    "Rakefile",
+    "SConscript",
+    "SConstruct",
+    "WORKSPACE",
+    "WORKSPACE.bazel",
+    "build.gradle",
+    "build.gradle.kts",
+    "composer.json",
+    "go.mod",
+    "go.sum",
+    "meson.build",
+    "meson_options.txt",
+    "mix.exs",
+    "package-lock.json",
+    "package.json",
+    "pom.xml",
+    "pyproject.toml",
+    "requirements.txt",
+    "settings.gradle",
+    "settings.gradle.kts",
+}
+GOVERNANCE_FILES = {"CODEOWNERS", "OWNERS", "PRESUBMIT.py", "SECURITY.md"}
 SPECIAL_FILES = {
+    *BUILD_FILES,
+    *GOVERNANCE_FILES,
     ".env.example",
     "Dockerfile",
     "Makefile",
@@ -218,6 +256,10 @@ def intent_kind(path_value: str, path: Path) -> str | None:
 
 
 def classify(path_value: str, path: Path) -> str:
+    if path.name in GOVERNANCE_FILES:
+        return "governance_file"
+    if path.name in BUILD_FILES or path.suffix.lower() in BUILD_SUFFIXES:
+        return "build_file"
     if is_test(path_value, path):
         return "test_file"
     if path.suffix.lower() in SOURCE_SUFFIXES or path.suffix.lower() in TEST_SUFFIXES:

@@ -114,7 +114,7 @@ def test_boundary_summary_reaches_completeness_and_decision_without_granting_aut
     completeness = audit(graph, subject=tmp_path)
     decision = decide(graph=graph, impact={"changed_files": []}, completeness=completeness)
 
-    assert graph["schema_version"] == "1.6"
+    assert graph["schema_version"] == "1.7"
     assert graph["metrics"]["unresolved_relationship_boundary_count"] == 1
     assert completeness["residuals"]["relationship_boundary_counts_by_kind"] == {"dynamic_load": 1}
     assert "runtime_or_build_context_required" in decision["decision"]["review_reasons"]
@@ -129,6 +129,9 @@ def test_boundary_rows_are_deterministic_and_do_not_create_edges(tmp_path):
     second = build_graph(subject=tmp_path)
 
     assert first["facts"]["relationship_boundaries"] == second["facts"]["relationship_boundaries"]
-    assert first["edges"] == second["edges"] == []
+    assert first["edges"] == second["edges"]
+    # The unresolved dynamic load still must not invent a dependency edge.
+    assert not any(edge["type"] in {"imports", "imports_package", "invokes", "sources"} for edge in first["edges"])
+    assert any(edge["type"] == "member_of_subsystem" for edge in first["edges"])
     ids = {node["id"] for node in first["nodes"]}
     assert all(edge["from"] in ids and edge["to"] in ids for edge in first["edges"])
