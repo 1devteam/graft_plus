@@ -42,7 +42,7 @@ def parse_public_repo(spec: str) -> tuple[str, str]:
 
 
 def validate_ref(ref: str) -> str:
-    """Return a safe git ref accepted as a positional clone argument."""
+    """Return a safe branch, tag, or commit-ish accepted as a git fetch ref."""
     value = ref.strip()
     if not _REF.fullmatch(value) or ".." in value or "//" in value or value.endswith(("/", ".lock")):
         raise ValueError("invalid git ref")
@@ -71,6 +71,22 @@ def validate_checkout(root: Path, limits: CloneLimits) -> None:
             raise RepositoryLimitError(f"repository exceeds {limits.max_total_bytes} materialized bytes")
 
 
+def _run_git(cmd: list[str], *, cwd: Path | None, timeout_seconds: int) -> None:
+    try:
+        result = subprocess.run(
+            cmd,
+            cwd=cwd,
+            text=True,
+            capture_output=True,
+            check=False,
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise TimeoutError(f"git operation exceeded {timeout_seconds} seconds") from exc
+    if result.returncode != 0:
+        raise RuntimeError(result.stderr.strip() or f"git command failed: {' '.join(cmd)}")
+
+
 def clone_public_repo(
     spec: str,
     dest: Path | None = None,
@@ -78,26 +94,41 @@ def clone_public_repo(
     *,
     limits: CloneLimits | None = None,
 ) -> Path:
+    """Materialize one public repository revision within the service safety envelope.
+
+    When ``ref`` is supplied, fetch it explicitly and detach at ``FETCH_HEAD`` so
+    branch names, tags, and reachable commit SHAs share the same reproducible
+    materialization path. Resource limits remain unchanged and are enforced after
+    checkout.
+    """
+
     owner, repo = parse_public_repo(spec)
     bounded = limits or CloneLimits()
     url = f"https://github.com/{owner}/{repo}.git"
     root = dest or Path(tempfile.mkdtemp(prefix=f"graft-{owner}-{repo}-"))
-    root.mkdir(parents=True, exist_ok=True)
-    cmd = ["git", "clone", "--depth", "1"]
+
     if ref:
-        cmd.extend(["--branch", validate_ref(ref)])
-    cmd.extend([url, str(root)])
-    try:
-        result = subprocess.run(
-            cmd,
-            text=True,
-            capture_output=True,
-            check=False,
-            timeout=bounded.timeout_seconds,
+        revision = validate_ref(ref)
+        root.mkdir(parents=True, exist_ok=True)
+        _run_git(["git", "init"], cwd=root, timeout_seconds=bounded.timeout_seconds)
+        _run_git(["git", "remote", "add", "origin", url], cwd=root, timeout_seconds=bounded.timeout_seconds)
+        _run_git(
+            ["git", "fetch", "--depth", "1", "origin", revision],
+            cwd=root,
+            timeout_seconds=bounded.timeout_seconds,
         )
-    except subprocess.TimeoutExpired as exc:
-        raise TimeoutError(f"repository clone exceeded {bounded.timeout_seconds} seconds") from exc
-    if result.returncode != 0:
-        raise RuntimeError(result.stderr.strip() or f"unable to clone {url}")
+        _run_git(
+            ["git", "checkout", "--detach", "FETCH_HEAD"],
+            cwd=root,
+            timeout_seconds=bounded.timeout_seconds,
+        )
+    else:
+        root.parent.mkdir(parents=True, exist_ok=True)
+        _run_git(
+            ["git", "clone", "--depth", "1", url, str(root)],
+            cwd=None,
+            timeout_seconds=bounded.timeout_seconds,
+        )
+
     validate_checkout(root, bounded)
     return root
