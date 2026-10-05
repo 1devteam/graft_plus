@@ -22,6 +22,7 @@ jobs:
             exit 0
           fi
           python tools/apply_hierarchical_architecture.py
+          python tools/fix_hierarchical_compat.py
           python -m pip install -e '.[dev]'
           pytest
           rm -rf /tmp/graft-self
@@ -29,6 +30,6 @@ jobs:
           python -c "import json; from pathlib import Path; out=Path('/tmp/graft-self'); g=json.loads((out/'canonical-graph.json').read_text()); c=json.loads((out/'graph-completeness-report.json').read_text()); d=json.loads((out/'graph-architecture-decision.json').read_text()); assert g['schema_version']=='1.7'; assert g['facts']['subsystem_count']>0; assert g['facts']['build_definition_count']>0; assert c['identity_integrity_pass'] is True; assert c['identity_collision_count']==0; assert d['grants_execution_authority'] is False; assert d['decision']['merge_authorization']=='not-determined'; print(json.dumps({'nodes':g['metrics']['node_count'],'edges':g['metrics']['edge_count'],'subsystems':g['facts']['subsystem_count'],'cross_language_subsystems':g['facts']['cross_language_subsystem_count'],'build_definitions':g['facts']['build_definition_count'],'build_inputs':g['facts']['build_input_edge_count'],'governance_boundaries':g['facts']['governance_boundary_count'],'source_provenance':g['facts']['source_provenance_counts'],'disposition':d['decision']['architecture_disposition']}, indent=2))"
           git config user.name '1devteam'
           git config user.email 'inmo.ai@outlook.com'
-          git add src/graft_plus/architecture.py src/graft_plus/inventory.py src/graft_plus/graph.py src/graft_plus/completeness.py src/graft_plus/decision.py tests/test_hierarchical_architecture.py
+          git add src/graft_plus/architecture.py src/graft_plus/inventory.py src/graft_plus/graph.py src/graft_plus/completeness.py src/graft_plus/decision.py tests/test_hierarchical_architecture.py tests/test_relationship_boundaries.py
           git commit -m 'feat: project repository truth into hierarchical architecture'
           git push origin HEAD:feat/hierarchical-architecture-20261005
