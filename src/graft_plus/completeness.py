@@ -250,9 +250,34 @@ def _collect_findings(graph: dict[str, Any], overlay: dict[str, Any]) -> list[di
     return findings
 
 
+def _classify_unresolved_imports(graph: dict[str, Any]) -> dict[str, int]:
+    counts: Counter[str] = Counter()
+    for row in (graph.get("facts") or {}).get("unresolved_imports") or []:
+        specifier = str(row.get("specifier") or "")
+        source = str(row.get("from") or "").lower()
+        lowered = specifier.lower()
+        if lowered.startswith(("http://", "https://", "chrome:", "chrome-untrusted:", "devtools:", "file:")):
+            kind = "url_or_scheme"
+        elif specifier.startswith("."):
+            kind = "relative_internal_reference"
+        elif any(token in source for token in ("/test", "tests/", ".test.", ".spec.", "fixture")):
+            kind = "test_or_fixture_context"
+        elif any(token in source for token in ("generated", "gen/", "out/", "build/")):
+            kind = "generated_or_build_context"
+        elif lowered.startswith(("tools.", "tools/", "build.", "build/", "scripts.", "scripts/")):
+            kind = "tooling_or_build_reference"
+        else:
+            kind = "unresolved_absolute_reference"
+        counts[kind] += 1
+    return dict(sorted(counts.items()))
+
+
 def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: dict[str, Any] | None = None, subject: Path | None = None) -> dict[str, Any]:
     overlay = overlay or {}
     impact = impact or {}
+    node_id_counts = Counter(str(node.get("id") or "") for node in graph.get("nodes") or [] if node.get("id"))
+    duplicate_node_ids = sorted(node_id for node_id, count in node_id_counts.items() if count > 1)
+    duplicate_node_occurrences = sum(count - 1 for count in node_id_counts.values() if count > 1)
     known = {str(n["id"]) for n in graph["nodes"]}
     missing_endpoints = sorted(
         {
@@ -284,7 +309,7 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
                 missing_edge_evidence.append(f"{edge.get('from')}->{edge.get('to')}:{edge.get('type')}")
             elif not (subject / evidence).exists():
                 missing_edge_evidence.append(evidence)
-    integrity_pass = not missing_endpoints and not unacknowledged_blocking and not missing_edge_evidence
+    integrity_pass = not duplicate_node_ids and not missing_endpoints and not unacknowledged_blocking and not missing_edge_evidence
     overlay_nodes = [n for n in graph["nodes"] if n.get("layer") == "overlay"]
     unresolved_roots = list((graph.get("facts") or {}).get("unresolved_package_roots") or [])
     coverage = coverage_inventory(subject, graph) if subject is not None else {
@@ -295,7 +320,10 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
     }
     residuals = {
         "overlay": "attached" if overlay_nodes else "residual",
+        "identity_collision_count": duplicate_node_occurrences,
+        "duplicate_node_ids": duplicate_node_ids,
         "unresolved_import_count": len((graph.get("facts") or {}).get("unresolved_imports") or []),
+        "unresolved_import_classes": _classify_unresolved_imports(graph),
         "unresolved_package_roots": unresolved_roots,
         "no_git_range": not bool(impact.get("changed_files")),
         "unmapped_changed_files": list(impact.get("unmapped_changed_files") or []),
@@ -331,6 +359,9 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
     return {
         "schema_version": "1.2",
         "integrity_pass": integrity_pass,
+        "identity_integrity_pass": not duplicate_node_ids,
+        "duplicate_node_ids": duplicate_node_ids,
+        "identity_collision_count": duplicate_node_occurrences,
         "undefined_edge_endpoints": missing_endpoints,
         "production_node_count": len(nodes),
         "production_edge_count": len(edges),
@@ -348,6 +379,9 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
         "unacknowledged_blocking_findings": unacknowledged_blocking,
         "acknowledged_findings": acknowledged,
         "integrity": {
+            "identity_integrity_pass": not duplicate_node_ids,
+            "duplicate_node_ids": duplicate_node_ids,
+            "identity_collision_count": duplicate_node_occurrences,
             "missing_semantic_edge_evidence": sorted(set(missing_edge_evidence)),
             "unacknowledged_blocking_findings": unacknowledged_blocking,
             "acknowledged_semantic_findings": acknowledged,
