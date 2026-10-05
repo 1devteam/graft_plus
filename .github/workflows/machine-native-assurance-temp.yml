@@ -1,12 +1,12 @@
 name: Machine-native G.R.A.F.T. assurance upgrade
 on:
   push:
-    branches: [feat/machine-native-assurance-20261005]
+    branches:
+      - feat/machine-native-assurance-20261005
 permissions:
   contents: write
 jobs:
   upgrade:
-    if: github.event.head_commit.message == 'chore: stage machine-native G.R.A.F.T. assurance upgrade'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -15,332 +15,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Derive coherent assurance upgrade
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          # 1. Semantic boundary: HTTP meaning must survive source-language semantics.
-          p = Path('src/graft_plus/semantic.py')
-          text = p.read_text()
-          old = '''                if last not in _ROUTE_METHODS or not path_lit:\n                    continue\n                add_route(\n'''
-          new = '''                if last not in _ROUTE_METHODS or not path_lit:\n                    continue\n                # A lexical method name is not enough to establish HTTP semantics.\n                # Route decorators require a route-shaped literal and a receiver; this\n                # deliberately excludes unittest/mock.patch and bare @patch targets.\n                owner = name.rsplit(".", 1)[0] if "." in name else ""\n                if not owner or not path_lit.startswith("/"):\n                    continue\n                if owner in {"mock", "unittest.mock"} or owner.endswith(".mock"):\n                    continue\n                add_route(\n'''
-          if old not in text:
-              raise SystemExit('semantic route marker not found')
-          p.write_text(text.replace(old, new, 1))
-
-          # 2. Assurance boundary: identity and unresolved-reference classes become first-class.
-          p = Path('src/graft_plus/completeness.py')
-          text = p.read_text()
-          helper_marker = '\n\ndef audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: dict[str, Any] | None = None, subject: Path | None = None) -> dict[str, Any]:\n'
-          helper = r'''
-
-def _classify_unresolved_imports(graph: dict[str, Any]) -> dict[str, int]:
-    counts: Counter[str] = Counter()
-    for row in (graph.get("facts") or {}).get("unresolved_imports") or []:
-        specifier = str(row.get("specifier") or "")
-        source = str(row.get("from") or "").lower()
-        lowered = specifier.lower()
-        if lowered.startswith(("http://", "https://", "chrome:", "chrome-untrusted:", "devtools:", "file:")):
-            kind = "url_or_scheme"
-        elif specifier.startswith("."):
-            kind = "relative_internal_reference"
-        elif any(token in source for token in ("/test", "tests/", ".test.", ".spec.", "fixture")):
-            kind = "test_or_fixture_context"
-        elif any(token in source for token in ("generated", "gen/", "out/", "build/")):
-            kind = "generated_or_build_context"
-        elif lowered.startswith(("tools.", "tools/", "build.", "build/", "scripts.", "scripts/")):
-            kind = "tooling_or_build_reference"
-        else:
-            kind = "unresolved_absolute_reference"
-        counts[kind] += 1
-    return dict(sorted(counts.items()))
-'''
-          if helper_marker not in text:
-              raise SystemExit('completeness audit marker not found')
-          text = text.replace(helper_marker, helper + helper_marker, 1)
-
-          old = '''    overlay = overlay or {}\n    impact = impact or {}\n    known = {str(n["id"]) for n in graph["nodes"]}\n'''
-          new = '''    overlay = overlay or {}\n    impact = impact or {}\n    node_id_counts = Counter(str(node.get("id") or "") for node in graph.get("nodes") or [] if node.get("id"))\n    duplicate_node_ids = sorted(node_id for node_id, count in node_id_counts.items() if count > 1)\n    duplicate_node_occurrences = sum(count - 1 for count in node_id_counts.values() if count > 1)\n    known = {str(n["id"]) for n in graph["nodes"]}\n'''
-          if old not in text:
-              raise SystemExit('completeness identity marker not found')
-          text = text.replace(old, new, 1)
-
-          old = '    integrity_pass = not missing_endpoints and not unacknowledged_blocking and not missing_edge_evidence\n'
-          new = '    integrity_pass = not duplicate_node_ids and not missing_endpoints and not unacknowledged_blocking and not missing_edge_evidence\n'
-          if old not in text:
-              raise SystemExit('integrity marker not found')
-          text = text.replace(old, new, 1)
-
-          old = '''        "overlay": "attached" if overlay_nodes else "residual",\n        "unresolved_import_count": len((graph.get("facts") or {}).get("unresolved_imports") or []),\n'''
-          new = '''        "overlay": "attached" if overlay_nodes else "residual",\n        "identity_collision_count": duplicate_node_occurrences,\n        "duplicate_node_ids": duplicate_node_ids,\n        "unresolved_import_count": len((graph.get("facts") or {}).get("unresolved_imports") or []),\n        "unresolved_import_classes": _classify_unresolved_imports(graph),\n'''
-          if old not in text:
-              raise SystemExit('residual marker not found')
-          text = text.replace(old, new, 1)
-
-          old = '''        "integrity_pass": integrity_pass,\n        "undefined_edge_endpoints": missing_endpoints,\n'''
-          new = '''        "integrity_pass": integrity_pass,\n        "identity_integrity_pass": not duplicate_node_ids,\n        "duplicate_node_ids": duplicate_node_ids,\n        "identity_collision_count": duplicate_node_occurrences,\n        "undefined_edge_endpoints": missing_endpoints,\n'''
-          if old not in text:
-              raise SystemExit('return identity marker not found')
-          text = text.replace(old, new, 1)
-
-          old = '''        "integrity": {\n            "missing_semantic_edge_evidence": sorted(set(missing_edge_evidence)),\n'''
-          new = '''        "integrity": {\n            "identity_integrity_pass": not duplicate_node_ids,\n            "duplicate_node_ids": duplicate_node_ids,\n            "identity_collision_count": duplicate_node_occurrences,\n            "missing_semantic_edge_evidence": sorted(set(missing_edge_evidence)),\n'''
-          if old not in text:
-              raise SystemExit('integrity detail marker not found')
-          text = text.replace(old, new, 1)
-          p.write_text(text)
-
-          # 3. Decision boundary: one scalar cannot stand in for unrelated propositions.
-          Path('src/graft_plus/decision.py').write_text(r'''"""Project reconstruction evidence into independent assurance propositions.
-
-The decision artifact is still a fact substrate: it never grants execution or merge
-authority.  A single architecture label is retained only as a compatibility summary;
-receivers must use the explicit dimensions for reasoning.
-"""
-
-from __future__ import annotations
-
-import hashlib
-import json
-from typing import Any
-
-from graft_plus import GRANTS_EXECUTION_AUTHORITY, IMPLEMENTS_PLAN, MERGE_AUTHORIZATION, PACKAGE, PRODUCT
-
-
-def _sha(payload: dict[str, Any]) -> str:
-    return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-
-
-def _ids(items: list[Any]) -> list[str]:
-    out = []
-    for item in items or []:
-        if isinstance(item, str) and item:
-            out.append(item)
-        elif isinstance(item, dict) and item.get("id"):
-            out.append(str(item["id"]))
-    return sorted(set(out))
-
-
-def decide(*, graph: dict[str, Any], impact: dict[str, Any], completeness: dict[str, Any]) -> dict[str, Any]:
-    integrity = completeness.get("integrity") or {}
-    residuals = completeness.get("residuals") or {}
-    blocking = list(integrity.get("unacknowledged_blocking_findings") or completeness.get("unacknowledged_blocking_findings") or [])
-    identity_collisions = int(completeness.get("identity_collision_count") or integrity.get("identity_collision_count") or 0)
-    identity_pass = bool(completeness.get("identity_integrity_pass", integrity.get("identity_integrity_pass", not identity_collisions)))
-    artifact_pass = bool(completeness.get("integrity_pass") if "integrity_pass" in completeness else integrity.get("pass"))
-
-    structural_gaps = []
-    if residuals.get("unmapped_source_file_count"):
-        structural_gaps.append("unmapped_source_files")
-    if residuals.get("relationship_unparsed_file_count"):
-        structural_gaps.append("relationship_unparsed_files")
-    if residuals.get("unresolved_relationship_boundary_count"):
-        structural_gaps.append("runtime_or_build_context_required")
-    if residuals.get("unresolved_import_count"):
-        structural_gaps.append("unresolved_references")
-    if residuals.get("stale_graph_source_count"):
-        structural_gaps.append("stale_graph_sources")
-
-    changed_files = list(impact.get("changed_files") or [])
-    unmapped_changed = list(impact.get("unmapped_changed_files") or [])
-    known_violations = list(integrity.get("known_violations") or [])
-
-    dimensions = {
-        "artifact_integrity": "passed" if artifact_pass else "blocked",
-        "identity_integrity": "passed" if identity_pass else "blocked",
-        "structural_coverage": "gaps-visible" if structural_gaps else "no-known-gaps",
-        "architectural_reconstruction": "bounded" if not structural_gaps and artifact_pass else "incomplete",
-        "change_evidence": "not-requested" if not changed_files else ("partial" if unmapped_changed else "available"),
-        "proof_readiness": "not-established",
-        "execution_authority": "not-granted",
-        "merge_authority": MERGE_AUTHORIZATION,
-    }
-
-    review = list(structural_gaps)
-    if unmapped_changed:
-        review.append("unmapped_changed_files")
-    if known_violations:
-        review.append("known_violations_visible")
-    if not changed_files:
-        review.append("no_git_range")
-    review = sorted(set(review))
-
-    warnings = []
-    if residuals.get("unresolved_import_classes"):
-        warnings.append("unresolved_references_classified")
-    if identity_collisions:
-        warnings.append("canonical_identity_collision")
-
-    if not artifact_pass or not identity_pass or blocking:
-        disposition = "blocked"
-    elif review:
-        disposition = "review-required"
-    else:
-        disposition = "clear"
-
-    blocking_reasons = list(blocking)
-    if not identity_pass:
-        blocking_reasons.append("canonical_identity_collision")
-    if completeness.get("undefined_edge_endpoints"):
-        blocking_reasons.append("undefined_edge_endpoints")
-    if integrity.get("missing_semantic_edge_evidence"):
-        blocking_reasons.append("missing_semantic_edge_evidence")
-
-    return {
-        "schema_version": "1.2",
-        "product": PRODUCT,
-        "package": PACKAGE,
-        "role": "fact-substrate",
-        "decision": {
-            "architecture_disposition": disposition,
-            "dimensions": dimensions,
-            "merge_authorization": MERGE_AUTHORIZATION,
-            "full_ci_required": True,
-            "blocking_reasons": sorted(set(blocking_reasons)),
-            "review_reasons": review,
-            "warnings": sorted(set(warnings)),
-        },
-        "grants_execution_authority": GRANTS_EXECUTION_AUTHORITY,
-        "implementsPlan": IMPLEMENTS_PLAN,
-        "completeness": {
-            "integrity_pass": completeness.get("integrity_pass"),
-            "identity_integrity_pass": identity_pass,
-            "identity_collision_count": identity_collisions,
-            "duplicate_node_ids": completeness.get("duplicate_node_ids") or integrity.get("duplicate_node_ids") or [],
-            "undefined_edge_endpoints": completeness.get("undefined_edge_endpoints") or [],
-            "unacknowledged_blocking_findings": blocking,
-            "acknowledged_semantic_findings": completeness.get("acknowledged_findings") or [],
-            "missing_semantic_edge_evidence": integrity.get("missing_semantic_edge_evidence") or [],
-            "semantic_reconciliation_counts": completeness.get("semantic_reconciliation_counts") or {},
-            "unmapped_source_files": residuals.get("unmapped_source_files") or [],
-            "stale_graph_sources": residuals.get("stale_graph_sources") or [],
-            "relationship_unparsed_files": residuals.get("relationship_unparsed_files") or [],
-            "relationship_boundary_count": residuals.get("relationship_boundary_count") or 0,
-            "unresolved_relationship_boundary_count": residuals.get("unresolved_relationship_boundary_count") or 0,
-            "unresolved_import_count": residuals.get("unresolved_import_count") or 0,
-            "unresolved_import_classes": residuals.get("unresolved_import_classes") or {},
-            "evidence_precision_counts": residuals.get("evidence_precision_counts") or {},
-        },
-        "residuals": residuals,
-        "impact": {
-            "changed_files": changed_files,
-            "changed_node_ids": _ids(impact.get("changed_nodes") or []),
-            "unmapped_changed_files": unmapped_changed,
-            "upstream_consumers": _ids(impact.get("upstream_consumers") or []),
-            "downstream_dependencies": _ids(impact.get("downstream_dependencies") or []),
-            "affected_semantic_node_ids": _ids(impact.get("affected_semantic_nodes") or []),
-            "dependency_semantic_node_ids": _ids(impact.get("dependency_semantic_nodes") or []),
-            "impacted_tests": impact.get("impacted_tests") or [],
-            "relevant_invariant_ids": _ids(impact.get("relevant_invariants") or []),
-        },
-        "inputs": {
-            "canonical_graph_sha256": _sha(graph),
-            "metrics": graph.get("metrics") or {},
-        },
-        "negatives": [
-            "This pack is a map. It is not a plan.",
-            "No single disposition substitutes for the independent assurance dimensions.",
-            "merge_authorization is not-determined even when disposition is clear.",
-            "An acknowledgement is not a repair.",
-            "Do not invent missing nodes or unresolved targets.",
-            "Unresolved references are classified residual evidence, not proof of missing files.",
-            "Overlay stays residual until a reviewed relationship is attached.",
-        ],
-    }
-''')
-
-          # 4. Regression contract derived from Chromium failures.
-          Path('tests/test_machine_native_assurance.py').write_text(r'''from graft_plus.completeness import audit
-from graft_plus.decision import decide
-from graft_plus.graph import build_graph
-
-
-def test_mock_patch_is_not_http_patch_route(tmp_path):
-    pkg = tmp_path / "pkg"
-    pkg.mkdir()
-    (pkg / "__init__.py").write_text("")
-    (pkg / "worker.py").write_text(
-        "from unittest import mock\n"
-        "@mock.patch('subprocess.run')\n"
-        "def execute(fake_run):\n"
-        "    return fake_run\n"
-    )
-    graph = build_graph(subject=tmp_path)
-    assert not any(node["type"] == "http_route" and node.get("method") == "PATCH" for node in graph["nodes"])
-
-
-def test_duplicate_canonical_identity_blocks_assurance():
-    graph = {
-        "nodes": [
-            {"id": "py:dup", "type": "python_module", "source": "a.py", "layer": "generated"},
-            {"id": "py:dup", "type": "python_module", "source": "b.py", "layer": "generated"},
-        ],
-        "edges": [],
-        "facts": {"unresolved_imports": []},
-        "metrics": {"node_count": 2, "edge_count": 0, "static_cycles": []},
-    }
-    report = audit(graph)
-    assert report["integrity_pass"] is False
-    assert report["identity_integrity_pass"] is False
-    assert report["identity_collision_count"] == 1
-    assert report["duplicate_node_ids"] == ["py:dup"]
-    decision = decide(graph=graph, impact={"changed_files": []}, completeness=report)
-    assert decision["decision"]["architecture_disposition"] == "blocked"
-    assert decision["decision"]["dimensions"]["identity_integrity"] == "blocked"
-
-
-def test_unresolved_references_are_classified_not_flattened():
-    graph = {
-        "nodes": [{"id": "py:a", "type": "python_module", "source": "a.py", "layer": "generated"}],
-        "edges": [],
-        "facts": {
-            "unresolved_imports": [
-                {"specifier": "chrome:settings", "from": "a.py"},
-                {"specifier": ".local", "from": "a.py"},
-                {"specifier": "mystery_pkg", "from": "a.py"},
-            ]
-        },
-        "metrics": {"node_count": 1, "edge_count": 0, "static_cycles": []},
-    }
-    report = audit(graph)
-    classes = report["residuals"]["unresolved_import_classes"]
-    assert classes["url_or_scheme"] == 1
-    assert classes["relative_internal_reference"] == 1
-    assert classes["unresolved_absolute_reference"] == 1
-
-
-def test_disposition_separates_integrity_coverage_and_change_evidence(tmp_path):
-    (tmp_path / "pkg").mkdir()
-    (tmp_path / "pkg" / "__init__.py").write_text("")
-    (tmp_path / "pkg" / "main.py").write_text("import unknown_package\n")
-    graph = build_graph(subject=tmp_path)
-    report = audit(graph, subject=tmp_path)
-    decision = decide(graph=graph, impact={"changed_files": []}, completeness=report)
-    dims = decision["decision"]["dimensions"]
-    assert dims["artifact_integrity"] == "passed"
-    assert dims["identity_integrity"] == "passed"
-    assert dims["structural_coverage"] == "gaps-visible"
-    assert dims["change_evidence"] == "not-requested"
-    assert decision["decision"]["architecture_disposition"] == "review-required"
-    assert decision["decision"]["merge_authorization"] == "not-determined"
-''')
-
-          # Legacy tests are intentionally tightened: absence of a git range or known
-          # violations can no longer be summarized as architecture-clear.
-          p = Path('tests/test_reconstruct.py')
-          text = p.read_text()
-          text = text.replace('assert decision["decision"]["architecture_disposition"] == "clear"',
-                              'assert decision["decision"]["architecture_disposition"] == "review-required"', 1)
-          text = text.replace('assert passed["decision"]["architecture_disposition"] == "clear"',
-                              'assert passed["decision"]["architecture_disposition"] == "review-required"', 1)
-          p.write_text(text)
-
-          # 5. Receiver-facing contract: explain the machine-native assurance model.
-          Path('docs/ASSURANCE.md').write_text('''# G.R.A.F.T.+ assurance model\n\nThe reconstruction pack separates propositions that were previously collapsed into one architecture disposition.\n\n1. **Artifact integrity** — edge endpoints, evidence anchors, blocking findings, and canonical identity are internally coherent.\n2. **Identity integrity** — every canonical node ID is unique. Any collision is blocking.\n3. **Structural coverage** — unmapped sources, unparsed relationships, unresolved references, and stale graph sources remain visible.\n4. **Architectural reconstruction** — reports whether the current static reconstruction is bounded or incomplete; it is not a claim of total system understanding.\n5. **Change evidence** — distinguishes no requested git range, partial mapping, and available blast-radius evidence.\n6. **Proof readiness** — remains not-established unless a subject-specific proof contract establishes it.\n7. **Execution and merge authority** — never granted by the reconstruction artifact.\n\nThis structure is derived from the Chromium stress evidence: ingestion scale, semantic fidelity, identity integrity, coverage, proof, and authority are different propositions and must not substitute for one another.\n''')
-          PY
-      - name: Validate full repository behavior
+      - name: Apply derived system transformation
+        run: python tools/apply_machine_native_assurance.py
+      - name: Validate repository and reconstructed self-model
         run: |
           python -m pip install -e '.[dev]'
           pytest
@@ -350,25 +27,20 @@ def test_disposition_separates_integrity_coverage_and_change_evidence(tmp_path):
           import json
           from pathlib import Path
           out = Path('/tmp/graft-self')
-          complete = json.loads((out/'graph-completeness-report.json').read_text())
-          decision = json.loads((out/'graph-architecture-decision.json').read_text())
+          complete = json.loads((out / 'graph-completeness-report.json').read_text())
+          decision = json.loads((out / 'graph-architecture-decision.json').read_text())
           assert complete['identity_integrity_pass'] is True
           assert complete['identity_collision_count'] == 0
           assert 'dimensions' in decision['decision']
           assert decision['decision']['merge_authorization'] == 'not-determined'
           assert decision['grants_execution_authority'] is False
-          print(json.dumps({
-              'nodes': complete['node_count'],
-              'edges': complete['edge_count'],
-              'identity_integrity_pass': complete['identity_integrity_pass'],
-              'disposition': decision['decision']['architecture_disposition'],
-              'dimensions': decision['decision']['dimensions'],
-          }, indent=2))
+          print(json.dumps({'nodes': complete['node_count'], 'edges': complete['edge_count'], 'disposition': decision['decision']['architecture_disposition'], 'dimensions': decision['decision']['dimensions']}, indent=2))
           PY
       - name: Commit coherent upgrade
         run: |
           git config user.name '1devteam'
           git config user.email 'inmo.ai@outlook.com'
           git add src/graft_plus/semantic.py src/graft_plus/completeness.py src/graft_plus/decision.py tests/test_machine_native_assurance.py tests/test_reconstruct.py docs/ASSURANCE.md
+          if git diff --cached --quiet; then exit 0; fi
           git commit -m 'feat: make reconstruction assurance machine-native'
           git push origin HEAD:feat/machine-native-assurance-20261005
