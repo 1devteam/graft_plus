@@ -45,6 +45,13 @@ def test_cli_writes_decipher_pack(tmp_path):
     assert (out / "dependency-graph.v1.json").exists()
     receipt = json.loads((out / "graft-plus-receipt.json").read_text(encoding="utf-8"))
     assert receipt["files"][0] == "00-AI-READ-FIRST.md"
+    assert receipt["engine"] == "python-universal-shell"
+    provenance = receipt["semantic_provenance"]
+    assert provenance["semantic_authority"] == "1devteam/graft_plus"
+    assert provenance["canonical_schema_version"] == "1.7"
+    assert provenance["website_execution_authority"] == "1devteam/1devteam-web"
+    assert provenance["website_synchronization_mode"] == "github-reviewed-manual-port"
+    assert provenance["website_runtime_dependency"] == "none"
 
 
 def test_frozen_negatives_cannot_grant_authority():
