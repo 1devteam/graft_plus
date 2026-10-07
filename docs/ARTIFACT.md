@@ -69,3 +69,30 @@ The remaining reports answer narrower questions:
 `clear` means the emitted map passed its integrity checks. It does not grant
 merge or execution authority, prove runtime behavior, infer router prefixes,
 or turn declared intent into fact.
+
+
+## Schema 1.8 machine-native representation
+
+Schema 1.8 separates architectural truth from high-volume residual evidence.
+
+- `dependency-graph.v1.json` remains the compact core graph. It no longer repeats
+  every unresolved reference row inline.
+- `graph-unresolved-ledger.v1.json` preserves unresolved-reference evidence
+  losslessly using dictionary tables plus integer reference pairs. It also carries
+  class counts and bounded high-frequency summaries for fast inspection.
+- `graph-machine-index.v1.json` precomputes descriptive topology needed often by
+  downstream models: node/edge populations, fan-in/fan-out hubs, dependency hubs,
+  contract/build hubs, cross-subsystem traffic, isolated-node counts, and residual
+  summaries.
+
+This is a representation optimization, not evidence deletion. The ledger metadata
+embedded in the core graph includes a SHA-256 digest of the exact sidecar content.
+
+Schema 1.8 also projects GN build targets as first-class `build_target` nodes.
+`BUILD.gn` targets declare source inputs and target dependencies where literal
+repository evidence is sufficient. C/C++ quoted includes additionally resolve from
+the repository root when that exact file exists, matching common monorepo include
+semantics without inventing build state.
+
+High degree, cross-subsystem traffic, and hub status are descriptive signals only.
+They are not refactor recommendations, defect classifications, or product plans.
