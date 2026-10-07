@@ -166,7 +166,8 @@ def reconstruct(
     receipt = {
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
-        "engine": "universal-shell",
+        "engine": "python-universal-shell",
+        "semantic_provenance": graph["semantic_provenance"],
         "subject": str(subject),
         "subject_sha": _git_sha(subject),
         "status": "passed" if completeness.get("integrity_pass") and not completeness.get("unacknowledged_blocking_findings") else "failed",

@@ -431,6 +431,14 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "role": "fact-substrate",
         "implementsPlan": False,
         "grants_execution_authority": False,
+        "semantic_provenance": {
+            "semantic_authority": "1devteam/graft_plus",
+            "canonical_engine": "python-universal-shell",
+            "canonical_schema_version": "1.7",
+            "website_execution_authority": "1devteam/1devteam-web",
+            "website_synchronization_mode": "github-reviewed-manual-port",
+            "website_runtime_dependency": "none",
+        },
         "generated_from": {
             "python_roots": [str(p.relative_to(subject)) if p != subject else "." for p in py_roots],
             "adapters": [
