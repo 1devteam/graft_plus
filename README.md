@@ -39,18 +39,12 @@ Give the complete pack to the receiving AI; `00-AI-READ-FIRST.md` tells it how t
 interpret the evidence without overstating what static reconstruction proves.
 See [docs/ARTIFACT.md](docs/ARTIFACT.md).
 
-## Stateless web boundary
+## Website authority and synchronization
 
-The optional HTTP adapter runs this same canonical engine for the public
-1devteam.com workbench:
+`1devteam/graft_plus` is the semantic authority for G.R.A.F.T.+ research and reconstruction behavior. The deployed public workbench at `1devteam.com/graft` keeps its execution authority inside `1devteam/1devteam-web` and runs an embedded browser port. The website does not require this repository to be running as a backend service.
 
-```bash
-pip install -e ".[service]"
-GRAFT_ALLOWED_ORIGINS=https://1devteam.com,https://www.1devteam.com graft-plus-api
-```
+Approved semantic changes move to the website through GitHub-reviewed ports. A website port records the canonical reference revision it was compared against, its embedded schema version, and whether semantic parity is actually claimed. A reference SHA is provenance, not proof that the browser port is current.
 
-`POST /v1/reconstruct` accepts a public GitHub `repository` and optional
-`ref`, then returns the validated pack as a ZIP. Source and artifacts exist
-only in a bounded temporary workspace and are removed before the response is
-sent. Responses are `no-store`; the service has no account, history, plan, or
-merge-authority surface.
+Cloudflare may host the website, but G.R.A.F.T.+ reconstruction must not require a Cloudflare Worker, tunnel, localhost service, or external graph runtime. The optional HTTP adapter in this repository remains available for development, integration testing, and other explicitly chosen deployments; it is not the authority loop for the public website.
+
+See [docs/DEPLOYMENT_SYNC.md](docs/DEPLOYMENT_SYNC.md) for the cross-repository contract.
