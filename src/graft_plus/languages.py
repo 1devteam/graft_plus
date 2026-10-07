@@ -177,6 +177,7 @@ def _relative_candidates(source: Path, value: str, spec: LanguageSpec) -> list[P
 
 def _resolve_reference(
     *,
+    subject: Path,
     spec: LanguageSpec,
     source: Path,
     kind: str,
@@ -187,6 +188,10 @@ def _resolve_reference(
     candidates: set[Path] = set()
     if kind == "relative":
         candidates.update(path for path in _relative_candidates(source, value, spec) if path in files)
+        if spec.name == "native":
+            root_candidate = (subject / value.lstrip("/")).resolve()
+            if root_candidate in files:
+                candidates.add(root_candidate)
     elif kind == "rust_mod":
         candidates.update(
             path
@@ -266,6 +271,7 @@ def _collect_spec(
         source_id = _node_id(spec, subject, path, tests)
         for kind, value in spec.references(text):
             target = _resolve_reference(
+                subject=subject,
                 spec=spec,
                 source=path,
                 kind=kind,

@@ -114,7 +114,7 @@ def test_boundary_summary_reaches_completeness_and_decision_without_granting_aut
     completeness = audit(graph, subject=tmp_path)
     decision = decide(graph=graph, impact={"changed_files": []}, completeness=completeness)
 
-    assert graph["schema_version"] == "1.7"
+    assert graph["schema_version"] == "1.8"
     assert graph["metrics"]["unresolved_relationship_boundary_count"] == 1
     assert completeness["residuals"]["relationship_boundary_counts_by_kind"] == {"dynamic_load": 1}
     assert "runtime_or_build_context_required" in decision["decision"]["review_reasons"]

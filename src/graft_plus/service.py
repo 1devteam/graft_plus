@@ -23,7 +23,9 @@ MAX_REQUEST_BYTES = 8 * 1024
 PACK_FILES = (
     "00-AI-READ-FIRST.md",
     "graph-architecture-decision.json",
+    "graph-machine-index.v1.json",
     "dependency-graph.v1.json",
+    "graph-unresolved-ledger.v1.json",
     "graph-completeness-report.json",
     "graph-impact-report.json",
     "graph-proof-manifest.json",
