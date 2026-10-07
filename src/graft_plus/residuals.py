@@ -93,3 +93,20 @@ def compact_graph(graph: dict[str, Any], ledger: dict[str, Any]) -> dict[str, An
     facts.pop("unresolved_imports", None)
     facts["unresolved_reference_ledger"] = ledger_metadata(ledger)
     return {**graph, "facts": facts}
+
+
+def decode_unresolved_ledger(ledger: dict[str, Any]) -> list[dict[str, str]]:
+    specifiers = list(ledger.get("specifier_table") or [])
+    sources = list(ledger.get("source_table") or [])
+    rows: list[dict[str, str]] = []
+    for pair in ledger.get("references") or []:
+        if not isinstance(pair, list) or len(pair) != 2:
+            continue
+        specifier_index, source_index = pair
+        rows.append(
+            {
+                "specifier": str(specifiers[int(specifier_index)]),
+                "from": str(sources[int(source_index)]),
+            }
+        )
+    return sorted(rows, key=lambda row: (row["specifier"], row["from"]))
