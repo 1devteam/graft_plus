@@ -38,6 +38,7 @@ graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
 Give the complete pack to the receiving AI; `00-AI-READ-FIRST.md` tells it how to
 interpret the evidence without overstating what static reconstruction proves.
 See [docs/ARTIFACT.md](docs/ARTIFACT.md).
+Current Chromium-scale and expansion-inference research is recorded in [docs/RND_CHROMIUM_EXPANSION_INFERENCE.md](docs/RND_CHROMIUM_EXPANSION_INFERENCE.md).
 
 ## Website authority and synchronization
 
