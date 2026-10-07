@@ -20,6 +20,7 @@ TYPE_BOUNDARY = {
     "runtime": "runtime",
     "subsystem": "subsystem",
     "build_definition": "build-system",
+    "build_target": "build-target",
     "governance_boundary": "governance",
     "security_boundary": "security-boundary",
     "external_service": "external",
