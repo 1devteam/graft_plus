@@ -122,4 +122,3 @@ def build_machine_index(graph: dict[str, Any], ledger: dict[str, Any]) -> dict[s
             "Cross-subsystem traffic is evidence of coupling, not proof of improper coupling.",
         ],
     }
-}
