@@ -1,3 +1,4 @@
+import hashlib
 import json
 
 from graft_plus.cli import reconstruct
@@ -119,6 +120,9 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
 
     assert graph["schema_version"] == "1.8"
     assert "unresolved_imports" not in graph["facts"]
+    ledger_bytes = (out / "graph-unresolved-ledger.v1.json").read_bytes()
+    assert graph["facts"]["unresolved_reference_ledger"]["sha256"] == hashlib.sha256(ledger_bytes).hexdigest()
+    assert b"\n  " not in (out / "dependency-graph.v1.json").read_bytes()
     assert ledger["reference_count"] == 1
     assert decode_unresolved_ledger(ledger) == [
         {"specifier": "mystery_package", "from": "main.py"}
