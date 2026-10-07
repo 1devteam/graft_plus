@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from graft_plus.coverage import inventory as coverage_inventory
+from graft_plus.residuals import classify_unresolved_reference
 
 TEST_EDGE_TYPES = frozenset({"tests", "tests_function"})
 STATIC_EDGE_TYPE = "imports"
@@ -257,24 +258,13 @@ def _collect_findings(graph: dict[str, Any], overlay: dict[str, Any]) -> list[di
 def _classify_unresolved_imports(graph: dict[str, Any]) -> dict[str, int]:
     counts: Counter[str] = Counter()
     for row in (graph.get("facts") or {}).get("unresolved_imports") or []:
-        specifier = str(row.get("specifier") or "")
-        source = str(row.get("from") or "").lower()
-        lowered = specifier.lower()
-        if lowered.startswith(("http://", "https://", "chrome:", "chrome-untrusted:", "devtools:", "file:")):
-            kind = "url_or_scheme"
-        elif specifier.startswith("."):
-            kind = "relative_internal_reference"
-        elif any(token in source for token in ("/test", "tests/", ".test.", ".spec.", "fixture")):
-            kind = "test_or_fixture_context"
-        elif any(token in source for token in ("generated", "gen/", "out/", "build/")):
-            kind = "generated_or_build_context"
-        elif lowered.startswith(("tools.", "tools/", "build.", "build/", "scripts.", "scripts/")):
-            kind = "tooling_or_build_reference"
-        else:
-            kind = "unresolved_absolute_reference"
-        counts[kind] += 1
+        counts[
+            classify_unresolved_reference(
+                str(row.get("specifier") or ""),
+                str(row.get("from") or ""),
+            )
+        ] += 1
     return dict(sorted(counts.items()))
-
 
 def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: dict[str, Any] | None = None, subject: Path | None = None) -> dict[str, Any]:
     overlay = overlay or {}
