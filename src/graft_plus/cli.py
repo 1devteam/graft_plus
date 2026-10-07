@@ -14,7 +14,7 @@ from graft_plus.graph import build_graph, load_overlay
 from graft_plus.impact import analyze_impact, changed_files
 from graft_plus.machine_index import build_machine_index
 from graft_plus.proof import select_proofs
-from graft_plus.residuals import LEDGER_FILE, build_unresolved_ledger, compact_graph
+from graft_plus.residuals import LEDGER_FILE, build_unresolved_ledger, canonical_json_bytes, compact_graph
 
 
 AI_RECEIVER_GUIDE = """# G.R.A.F.T.+ AI Receiver Guide
@@ -123,6 +123,11 @@ def _write(path: Path, payload: dict) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _write_machine(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(canonical_json_bytes(payload))
+
+
 def _write_receiver_guide(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(AI_RECEIVER_GUIDE, encoding="utf-8")
@@ -168,9 +173,9 @@ def reconstruct(
     machine_index = build_machine_index(graph, unresolved_ledger)
     artifact_graph = compact_graph(graph, unresolved_ledger)
     _write_receiver_guide(out / "00-AI-READ-FIRST.md")
-    _write(out / "dependency-graph.v1.json", artifact_graph)
-    _write(out / LEDGER_FILE, unresolved_ledger)
-    _write(out / "graph-machine-index.v1.json", machine_index)
+    _write_machine(out / "dependency-graph.v1.json", artifact_graph)
+    _write_machine(out / LEDGER_FILE, unresolved_ledger)
+    _write_machine(out / "graph-machine-index.v1.json", machine_index)
     _write(out / "graph-completeness-report.json", completeness)
     _write(out / "graph-impact-report.json", impact)
     _write(out / "graph-proof-manifest.json", proofs)
