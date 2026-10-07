@@ -12,7 +12,9 @@ from graft_plus.decision import decide
 from graft_plus.fetch import clone_public_repo
 from graft_plus.graph import build_graph, load_overlay
 from graft_plus.impact import analyze_impact, changed_files
+from graft_plus.machine_index import build_machine_index
 from graft_plus.proof import select_proofs
+from graft_plus.residuals import LEDGER_FILE, build_unresolved_ledger, compact_graph
 
 
 AI_RECEIVER_GUIDE = """# G.R.A.F.T.+ AI Receiver Guide
@@ -46,15 +48,20 @@ residual ledgers instead of speculative edges.
 
 1. `graft-plus-receipt.json` — confirm product, subject revision, status, and
    authority limits.
-2. `graph-completeness-report.json` — check integrity, parser coverage,
+2. `graph-machine-index.v1.json` — start here for machine-scale topology:
+   node/edge populations, high fan-in/out, dependency hubs, cross-subsystem
+   traffic, and compact unresolved summaries.
+3. `graph-completeness-report.json` — check integrity, parser coverage,
    residuals, stale evidence, boundaries, and acknowledged findings.
-3. `graph-architecture-decision.json` — use as a compact orientation summary,
+4. `graph-architecture-decision.json` — use as a compact orientation summary,
    not as permission or final judgment.
-4. `dependency-graph.v1.json` — inspect the nodes, edges, facts, and
-   `evidence_anchor` objects behind every material claim.
-5. `graph-impact-report.json` — use change-specific reach only when a git range
+5. `dependency-graph.v1.json` — inspect the compact core graph and
+   `evidence_anchor` objects behind material claims.
+6. `graph-unresolved-ledger.v1.json` — open only when unresolved-reference
+   detail is needed. It is lossless and dictionary encoded.
+7. `graph-impact-report.json` — use change-specific reach only when a git range
    was requested. Empty fields with no requested range do not mean zero impact.
-6. `graph-proof-manifest.json` — inspect declared proof obligations; do not
+8. `graph-proof-manifest.json` — inspect declared proof obligations; do not
    treat selected tests as proof beyond what they actually exercise.
 
 ## How to reason from the graph
@@ -157,8 +164,13 @@ def reconstruct(
     completeness = audit(graph, overlay_payload, impact, subject)
     proofs = select_proofs(impact, overlay_payload)
     decision = decide(graph=graph, impact=impact, completeness=completeness)
+    unresolved_ledger = build_unresolved_ledger(list((graph.get("facts") or {}).get("unresolved_imports") or []))
+    machine_index = build_machine_index(graph, unresolved_ledger)
+    artifact_graph = compact_graph(graph, unresolved_ledger)
     _write_receiver_guide(out / "00-AI-READ-FIRST.md")
-    _write(out / "dependency-graph.v1.json", graph)
+    _write(out / "dependency-graph.v1.json", artifact_graph)
+    _write(out / LEDGER_FILE, unresolved_ledger)
+    _write(out / "graph-machine-index.v1.json", machine_index)
     _write(out / "graph-completeness-report.json", completeness)
     _write(out / "graph-impact-report.json", impact)
     _write(out / "graph-proof-manifest.json", proofs)
@@ -172,10 +184,14 @@ def reconstruct(
         "subject_sha": _git_sha(subject),
         "status": "passed" if completeness.get("integrity_pass") and not completeness.get("unacknowledged_blocking_findings") else "failed",
         "decipher": "graph-architecture-decision.json",
+        "machine_index": "graph-machine-index.v1.json",
+        "residual_ledger": LEDGER_FILE,
         "files": [
             "00-AI-READ-FIRST.md",
             "graph-architecture-decision.json",
+            "graph-machine-index.v1.json",
             "dependency-graph.v1.json",
+            "graph-unresolved-ledger.v1.json",
             "graph-completeness-report.json",
             "graph-impact-report.json",
             "graph-proof-manifest.json",
