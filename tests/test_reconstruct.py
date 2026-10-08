@@ -68,7 +68,7 @@ def test_cli_writes_fact_pack(tmp_path):
 
     provenance = receipt["semantic_provenance"]
     assert provenance["semantic_authority"] == "1devteam/graft_plus"
-    assert provenance["canonical_schema_version"] == "1.8"
+    assert provenance["canonical_schema_version"] == "1.9"
     assert provenance["website_execution_authority"] == "1devteam/1devteam-web"
     assert provenance["website_synchronization_mode"] == "github-reviewed-manual-port"
     assert provenance["website_runtime_dependency"] == "none"
