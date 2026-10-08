@@ -92,11 +92,6 @@ def build_change_set(
             "changed_file_count": 0,
             "changed_node_count": 0,
             "unmapped_changed_file_count": 0,
-            "negatives": [
-                "No git range was requested.",
-                "No transitive reachability is calculated.",
-                "No tests, proofs, risks, or decisions are selected.",
-            ],
         }
 
     files = changed_files(subject, base_ref, head_ref)
@@ -128,9 +123,4 @@ def build_change_set(
         "changed_file_count": len(files),
         "changed_node_count": len(node_ids),
         "unmapped_changed_file_count": len(unmapped),
-        "negatives": [
-            "Node mappings are direct source-field matches only.",
-            "No transitive reachability is calculated.",
-            "No tests, proofs, risks, or decisions are selected.",
-        ],
     }
