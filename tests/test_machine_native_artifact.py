@@ -155,11 +155,19 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
     ledger = json.loads((out / "graph-unresolved-ledger.v1.json").read_text())
     receipt = json.loads((out / "graft-plus-receipt.json").read_text())
 
-    assert graph["schema_version"] == "1.8"
+    assert graph["schema_version"] == "1.9"
     assert change_set["role"] == "factual-change-set"
     assert change_set["requested"] is False
     assert ascii_graph["metrics"]["node_count"] == graph["metrics"]["node_count"]
     assert ascii_graph["metrics"]["edge_count"] == graph["metrics"]["edge_count"]
+    for derived_metric in (
+        "edge_counts_by_type",
+        "top_fan_in",
+        "top_fan_out",
+        "top_production_fan_in",
+        "static_cycles",
+    ):
+        assert derived_metric not in graph["metrics"]
     assert "unresolved_imports" not in graph["facts"]
     ledger_bytes = (out / "graph-unresolved-ledger.v1.json").read_bytes()
     assert graph["facts"]["unresolved_reference_ledger"]["sha256"] == hashlib.sha256(ledger_bytes).hexdigest()
