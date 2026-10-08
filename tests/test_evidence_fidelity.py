@@ -130,8 +130,8 @@ def test_contract_declarations_imports_and_literal_consumers(tmp_path):
         and edge["type"] == "consumes_contract"
         for edge in graph["edges"]
     )
-    assert graph["metrics"]["contract_source_count"] == 5
-    assert graph["metrics"]["contract_declaration_count"] >= 8
+    assert graph["facts"]["contract_source_count"] == 5
+    assert graph["facts"]["contract_declaration_count"] >= 8
 
 
 def test_configuration_and_deployment_map_names_without_values(tmp_path):
@@ -185,7 +185,7 @@ def test_configuration_and_deployment_map_names_without_values(tmp_path):
     assert completeness["residuals"]["deployment_fact_count"] >= 7
     assert (
         completeness["residuals"]["evidence_precision_counts"]
-        == graph["metrics"]["evidence_precision_counts"]
+        == graph["facts"]["evidence_precision_counts"]
     )
     assert completeness["integrity_pass"] is True
 

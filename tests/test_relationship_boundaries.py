@@ -112,8 +112,8 @@ def test_boundary_summary_reaches_completeness_without_adjudication(tmp_path):
     graph = build_graph(subject=tmp_path)
     completeness = audit(graph, subject=tmp_path)
 
-    assert graph["schema_version"] == "1.9"
-    assert graph["metrics"]["unresolved_relationship_boundary_count"] == 1
+    assert graph["schema_version"] == "1.10"
+    assert graph["facts"]["unresolved_relationship_boundary_count"] == 1
     assert completeness["residuals"]["relationship_boundary_counts_by_kind"] == {
         "dynamic_load": 1
     }
