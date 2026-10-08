@@ -56,19 +56,24 @@ declaration, or entrypoint convention. Repository-relative `function_roots`
 in the overlay may deliberately retain every top-level function in a selected
 composition root. Unrelated isolated helpers stay out of the artifact.
 
-The remaining reports answer narrower questions:
+The remaining factual sidecars answer narrower questions:
 
-- `graph-impact-report.json`: changed nodes, upstream consumers, downstream
-  dependencies, semantic reach, and impacted tests for a requested git range.
-- `graph-completeness-report.json`: endpoint integrity, stale evidence,
+- `graph-change-set.v1.json`: requested git refs, exact resolved SHAs, changed
+  files, direct source-to-node mappings, and unmapped changed files. It contains
+  no transitive reachability or test/proof selection.
+- `graph-completeness-report.json`: instrument integrity, stale evidence,
   parser-coverage residuals, boundaries, cycles, and acknowledged findings.
-- `graph-proof-manifest.json`: overlay-selected proof obligations; it never
-  invents product-specific gates.
-- `graft-plus-receipt.json`: subject revision and reconstruction status.
+- `graft-plus-receipt.json`: subject revision, artifact inventory, and the
+  instrument-integrity-only status.
 
-`clear` means the emitted map passed its integrity checks. It does not grant
-merge or execution authority, prove runtime behavior, infer router prefixes,
-or turn declared intent into fact.
+The former impact, proof-manifest, and architecture-decision sidecars are no
+longer emitted. Blast radius, proof selection, risk classification, and
+architecture disposition belong to the receiving LLM.
+
+
+`passed` means the emitted map passed its instrument-integrity checks. It does
+not grant merge or execution authority, prove runtime behavior, infer router
+prefixes, select proof, calculate blast radius, or turn declared intent into fact.
 
 
 ## Schema 1.8 machine-native representation
