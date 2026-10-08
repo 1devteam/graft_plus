@@ -15,6 +15,8 @@ from graft_plus.residuals import classify_unresolved_reference
 
 TEST_EDGE_TYPES = frozenset({"tests", "tests_function"})
 STATIC_EDGE_TYPE = "imports"
+
+
 def _collect_findings(graph: dict[str, Any], overlay: dict[str, Any]) -> list[dict[str, Any]]:
     findings = [dict(item) for item in (graph.get("semantic_findings") or [])]
     seen = {str(item.get("id")) for item in findings if item.get("id")}
@@ -43,6 +45,7 @@ def _classify_unresolved_imports(graph: dict[str, Any]) -> dict[str, int]:
             )
         ] += 1
     return dict(sorted(counts.items()))
+
 
 def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, subject: Path | None = None) -> dict[str, Any]:
     """Validate the instrument output and expose unresolved factual residuals."""
@@ -132,7 +135,8 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, subject:
         "note": "Residuals stay visible. An acknowledgement is not a repair. Overlay stays residual until a reviewed relationship is attached.",
     }
     return {
-        "schema_version": "1.3",
+        "schema_version": "1.4",
+        "role": "instrument-integrity",
         "integrity_pass": integrity_pass,
         "identity_integrity_pass": not duplicate_node_ids,
         "duplicate_node_ids": duplicate_node_ids,
