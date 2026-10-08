@@ -186,15 +186,6 @@ def collect_surfaces(subject: Path) -> list[StaticNode]:
     return nodes
 
 
-def _shape_metrics(node_ids: list[str], edges: list[dict[str, Any]]) -> dict[str, int]:
-    """Return graph shape only; topology analysis belongs to the receiver."""
-
-    return {
-        "node_count": len(node_ids),
-        "edge_count": len(edges),
-    }
-
-
 def load_overlay(path: Path | None) -> dict[str, Any]:
     if path is None or not path.exists():
         return {"schema_version": "1.0", "nodes": [], "edges": [], "invariants": []}
@@ -357,16 +348,14 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         key = json.dumps(edge, sort_keys=True, separators=(",", ":"))
         edge_by_key[key] = edge
     edges = list(edge_by_key.values())
-    node_ids = sorted(known)
     overlay_rel = None
     if overlay_path and overlay_path.exists():
         try:
             overlay_rel = str(overlay_path.resolve().relative_to(subject))
         except ValueError:
             overlay_rel = str(overlay_path)
-    overlay_count = sum(1 for n in nodes if n.get("layer") == "overlay")
     return {
-        "schema_version": "1.10",
+        "schema_version": "1.11",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -375,7 +364,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "semantic_provenance": {
             "semantic_authority": "1devteam/graft_plus",
             "canonical_engine": "python-universal-shell",
-            "canonical_schema_version": "1.10",
+            "canonical_schema_version": "1.11",
             "website_execution_authority": "1devteam/1devteam-web",
             "website_synchronization_mode": "github-reviewed-manual-port",
             "website_runtime_dependency": "none",
@@ -423,12 +412,6 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             **configuration_facts,
             **architecture_facts,
             "evidence_precision_counts": evidence_precision_counts,
-        },
-        "metrics": {
-            **_shape_metrics(node_ids, edges),
-            "overlay_node_count": overlay_count,
-            "unresolved_import_count": len(unresolved),
-            "surface_count": len(surfaces),
         },
     }
 
