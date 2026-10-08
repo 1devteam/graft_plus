@@ -1,7 +1,6 @@
 import json
 
 from graft_plus.completeness import audit
-from graft_plus.decision import decide
 from graft_plus.graph import build_graph
 
 
@@ -182,11 +181,13 @@ def test_configuration_and_deployment_map_names_without_values(tmp_path):
     }
     assert any(row.get("kind") == "port" and row.get("name") == "8000:8000" for row in graph["facts"]["deployment_facts"])
     completeness = audit(graph, subject=tmp_path)
-    decision = decide(graph=graph, impact={"changed_files": []}, completeness=completeness)
-    assert decision["completeness"]["configuration_key_count"] == 4
-    assert decision["completeness"]["deployment_fact_count"] >= 7
-    assert decision["completeness"]["evidence_precision_counts"] == graph["metrics"]["evidence_precision_counts"]
-    assert decision["grants_execution_authority"] is False
+    assert completeness["residuals"]["configuration_key_count"] == 4
+    assert completeness["residuals"]["deployment_fact_count"] >= 7
+    assert (
+        completeness["residuals"]["evidence_precision_counts"]
+        == graph["metrics"]["evidence_precision_counts"]
+    )
+    assert completeness["integrity_pass"] is True
 
 
 def test_lexical_boundary_detector_ignores_comments_and_string_bodies(tmp_path):
