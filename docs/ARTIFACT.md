@@ -1,10 +1,10 @@
 # Reading a G.R.A.F.T.+ pack
 
 Start with `00-AI-READ-FIRST.md`. It gives the receiving AI a conservative read
-order, question patterns, evidence rules, and a required Proven / Inferred /
-Unknown / Next inspection answer discipline. Then use
-`graft-plus-receipt.json` to confirm the subject revision and
-`dependency-graph.v1.json` for the evidence behind the summary.
+order and evidence rules. Then use `graft-plus-receipt.json` to confirm the
+subject revision and `dependency-graph.ascii.v1.txt` as the primary topology
+surface. Use `dependency-graph.v1.json` only when exact evidence anchors or
+fields omitted from the fast ASCII projection are needed.
 
 The graph is a source-backed map, not a source dump and not an adjudicator. It
 records system-bearing files, declared intent documents, modules, tests,
@@ -96,3 +96,34 @@ semantics without inventing build state.
 
 High degree, cross-subsystem traffic, and hub status are descriptive signals only.
 They are not refactor recommendations, defect classifications, or product plans.
+
+## ASCII topology IR v1
+
+`dependency-graph.ascii.v1.txt` is the primary LLM-facing topology projection.
+
+It is deterministic, ASCII-only, and contains observed graph structure rather than
+architectural judgment. It does not calculate blast radius, recommend changes, or
+grant authority.
+
+The format uses:
+
+- compact node codes assigned over a deterministic node ordering;
+- compact node-type and relation dictionaries;
+- node rows carrying full node identity, type, source, and selected structural
+  classification fields;
+- a fixed-width edge stream where each record is
+  `consumer-code + relation-code + dependency-code`;
+- a SHA-256 link back to the exact compact JSON graph that produced the projection.
+
+The node/relation codes use a base-62 ASCII alphabet and expand in width only when
+the graph population requires it. The edge stream is therefore substantially less
+ceremonial than JSON while remaining mechanically decodable.
+
+The ASCII projection is intentionally not a complete duplicate of every evidence
+field. G.R.A.F.T. targets a high-value structural surface first; exact evidence
+anchors and less frequently needed fields remain in `dependency-graph.v1.json`
+for targeted residual lookup.
+
+This split follows the machine-instrument rule: G.R.A.F.T. supplies observed facts
+in an efficient representation; the receiving LLM performs dependency reach,
+blast-radius, risk, architecture, and change reasoning.
