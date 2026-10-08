@@ -100,6 +100,27 @@ transitive reach, boundary matrices, cycle classification, and semantic
 corroboration are not part of the completeness report. They are derivable from
 the graph and belong to the receiving LLM rather than instrument self-validation.
 
+
+## Schema 1.9 canonical metric boundary
+
+Schema 1.9 removes derived topology analytics from the canonical graph metrics.
+
+The graph keeps only shape counts and observation counts produced directly by
+reconstruction, such as node/edge totals, parser coverage, unresolved counts,
+contract/configuration/build populations, and evidence precision.
+
+The following are no longer canonical graph fields because they are recoverable
+from the edge stream:
+
+- edge-type frequency tables;
+- ranked fan-in/fan-out lists;
+- production fan-in rankings;
+- static cycle detection.
+
+The receiving LLM derives these when a question requires them. This avoids
+persisting two representations of the same topology and keeps the canonical graph
+focused on observed identities, relationships, evidence, and reconstruction facts.
+
 ## ASCII topology IR v1
 
 `dependency-graph.ascii.v1.txt` is the primary LLM-facing topology projection.
