@@ -2,52 +2,71 @@ import json
 from pathlib import Path
 
 from graft_plus.cli import reconstruct
-from graft_plus.decision import decide
-from graft_plus.graph import build_graph
 from graft_plus.completeness import audit
-from graft_plus.impact import analyze_impact
+from graft_plus.fetch import parse_public_repo
+from graft_plus.graph import build_graph
 
 FIXTURE = Path(__file__).parent / "fixtures" / "tiny_subject"
 
 
 def test_tiny_subject_names_modules_and_tests():
     graph = build_graph(subject=FIXTURE)
-    ids = {n["id"] for n in graph["nodes"]}
+    ids = {node["id"] for node in graph["nodes"]}
     assert "py:pkg.core" in ids
     assert "py:pkg" in ids
-    assert any(i.startswith("test:") for i in ids)
-    assert any(e["type"] == "imports" for e in graph["edges"])
-    assert any(e["type"] == "tests" for e in graph["edges"])
+    assert any(node_id.startswith("test:") for node_id in ids)
+    assert any(edge["type"] == "imports" for edge in graph["edges"])
+    assert any(edge["type"] == "tests" for edge in graph["edges"])
 
 
-def test_decision_never_grants_merge(tmp_path):
-    graph = build_graph(subject=FIXTURE)
-    completeness = audit(graph)
-    impact = analyze_impact(graph, [])
-    decision = decide(graph=graph, impact=impact, completeness=completeness)
-    assert decision["decision"]["merge_authorization"] == "not-determined"
-    assert decision["grants_execution_authority"] is False
-    assert decision["implementsPlan"] is False
-    assert decision["decision"]["full_ci_required"] is True
-
-
-def test_cli_writes_decipher_pack(tmp_path):
+def test_cli_receipt_never_grants_reasoning_or_execution_authority(tmp_path):
     out = tmp_path / "pack"
-    rc = reconstruct(FIXTURE, out, None, None, None)
-    assert rc == 0
+    assert reconstruct(FIXTURE, out, None, None, None) == 0
+    receipt = json.loads((out / "graft-plus-receipt.json").read_text(encoding="utf-8"))
+
+    assert receipt["status_scope"] == "instrument-integrity-only"
+    assert receipt["merge_authorization"] == "not-determined"
+    assert receipt["grants_execution_authority"] is False
+    assert receipt["implementsPlan"] is False
+    assert set(receipt["does_not_compute"]) >= {
+        "blast_radius",
+        "proof_selection",
+        "risk_classification",
+        "architecture_disposition",
+        "change_recommendation",
+    }
+
+
+def test_cli_writes_fact_pack(tmp_path):
+    out = tmp_path / "pack"
+    assert reconstruct(FIXTURE, out, None, None, None) == 0
+
     guide = (out / "00-AI-READ-FIRST.md").read_text(encoding="utf-8")
-    assert "source-backed reconstruction" in guide
-    assert "Proven" in guide
-    assert "Inferred" in guide
-    assert "Unknown" in guide
-    assert "Next inspection" in guide
-    assert (out / "graph-architecture-decision.json").exists()
-    assert (out / "dependency-graph.v1.json").exists()
-    assert (out / "graph-machine-index.v1.json").exists()
-    assert (out / "graph-unresolved-ledger.v1.json").exists()
+    assert "G.R.A.F.T.+ is a fact instrument" in guide
+    assert "The receiving LLM owns those calculations and judgments." in guide
+
+    expected = {
+        "00-AI-READ-FIRST.md",
+        "dependency-graph.ascii.v1.txt",
+        "dependency-graph.v1.json",
+        "graph-change-set.v1.json",
+        "graph-machine-index.v1.json",
+        "graph-unresolved-ledger.v1.json",
+        "graph-completeness-report.json",
+        "graft-plus-receipt.json",
+    }
+    names = {path.name for path in out.iterdir()}
+    assert names == expected
+
+    change_set = json.loads((out / "graph-change-set.v1.json").read_text(encoding="utf-8"))
+    assert change_set["role"] == "factual-change-set"
+    assert change_set["requested"] is False
+
     receipt = json.loads((out / "graft-plus-receipt.json").read_text(encoding="utf-8"))
     assert receipt["files"][0] == "00-AI-READ-FIRST.md"
     assert receipt["engine"] == "python-universal-shell"
+    assert receipt["change_set"] == "graph-change-set.v1.json"
+
     provenance = receipt["semantic_provenance"]
     assert provenance["semantic_authority"] == "1devteam/graft_plus"
     assert provenance["canonical_schema_version"] == "1.8"
@@ -56,54 +75,24 @@ def test_cli_writes_decipher_pack(tmp_path):
     assert provenance["website_runtime_dependency"] == "none"
 
 
-def test_frozen_negatives_cannot_grant_authority():
-    graph = build_graph(subject=FIXTURE)
-    completeness = audit(graph)
-    completeness = {**completeness, "integrity_pass": True, "unacknowledged_blocking_findings": []}
-    impact = analyze_impact(graph, [])
-    decision = decide(graph=graph, impact=impact, completeness=completeness)
-    assert decision["decision"]["architecture_disposition"] == "review-required"
-    assert decision["decision"]["merge_authorization"] == "not-determined"
-    assert decision["grants_execution_authority"] is False
+def test_legacy_reasoning_modules_and_sidecars_are_removed(tmp_path):
+    src = Path(__file__).resolve().parents[1] / "src" / "graft_plus"
+    assert not (src / "impact.py").exists()
+    assert not (src / "proof.py").exists()
+    assert not (src / "decision.py").exists()
 
-
-def test_artifact_is_reconstruction_not_source_dump(tmp_path):
     out = tmp_path / "pack"
     assert reconstruct(FIXTURE, out, None, None, None) == 0
-    names = {p.name for p in out.iterdir()}
-    assert "00-AI-READ-FIRST.md" in names
-    assert "graph-architecture-decision.json" in names
-    assert "dependency-graph.v1.json" in names
-    assert "graph-machine-index.v1.json" in names
-    assert "graph-unresolved-ledger.v1.json" in names
-    assert "graph-completeness-report.json" in names
-    assert "graph-impact-report.json" in names
-    assert "graft-plus-receipt.json" in names
-    assert "GRAFT-MAP.md" not in names
-    assert not (out / "tree").exists()
+    for name in (
+        "graph-impact-report.json",
+        "graph-proof-manifest.json",
+        "graph-architecture-decision.json",
+    ):
+        assert not (out / name).exists()
 
 
 def test_public_repo_parse():
-    from graft_plus.fetch import parse_public_repo
     assert parse_public_repo("octocat/Hello-World") == ("octocat", "Hello-World")
-
-
-def test_proof_has_no_ajenda_bundles():
-    from graft_plus.proof import select_proofs
-    src = Path(__file__).resolve().parents[1] / "src"
-    text = (src / "graft_plus" / "proof.py").read_text()
-    assert "tenant-isolation" not in text
-    assert "hubspot" not in text.lower()
-    assert "ajenda" not in text.lower()
-    manifest = select_proofs({"impacted_tests": ["test:tests/test_reconstruct.py"], "changed_node_count": 1}, {})
-    assert manifest["required_tests"] == ["test:tests/test_reconstruct.py"]
-    assert manifest["selected_bundles"] == []
-
-
-def test_cli_writes_proof_manifest(tmp_path):
-    out = tmp_path / "pack"
-    assert reconstruct(FIXTURE, out, None, None, None) == 0
-    assert (out / "graph-proof-manifest.json").exists()
 
 
 def test_unresolved_and_surfaces_are_named(tmp_path):
@@ -114,16 +103,18 @@ def test_unresolved_and_surfaces_are_named(tmp_path):
     (tmp_path / ".github" / "workflows").mkdir(parents=True)
     (tmp_path / ".github" / "workflows" / "ci.yml").write_text("name: ci\n")
     (tmp_path / "pyproject.toml").write_text("[project]\nname='app'\n")
+
     graph = build_graph(subject=tmp_path)
-    ids = {n["id"] for n in graph["nodes"]}
+    ids = {node["id"] for node in graph["nodes"]}
     assert "py:app.main" in ids
     assert "ci:.github/workflows/ci.yml" in ids
+
     specs = {row["specifier"] for row in graph["facts"]["unresolved_imports"]}
     assert "requests" in specs
+
     completeness = audit(graph)
     assert completeness["residuals"]["overlay"] == "residual"
-    decision = decide(graph=graph, impact={"changed_files": []}, completeness=completeness)
-    assert decision["decision"]["merge_authorization"] == "not-determined"
+    assert completeness["residuals"]["unresolved_import_count"] >= 1
 
 
 def test_semantic_inventory_from_ajenda_logic(tmp_path):
@@ -146,9 +137,10 @@ def test_semantic_inventory_from_ajenda_logic(tmp_path):
         "def upgrade():\n"
         "    op.create_table('users', sa.Column('id', sa.Integer()), sa.Column('email', sa.String()))\n"
     )
+
     graph = build_graph(subject=tmp_path)
-    ids = {n["id"] for n in graph["nodes"]}
-    types = {n["type"] for n in graph["nodes"]}
+    ids = {node["id"] for node in graph["nodes"]}
+    types = {node["type"] for node in graph["nodes"]}
     assert "migration:0001_init" in ids
     assert "db:table:users" in ids
     assert "route:GET /health" in ids
@@ -156,9 +148,8 @@ def test_semantic_inventory_from_ajenda_logic(tmp_path):
     assert "database_table" in types
     assert "http_route" in types
     assert "network_egress_sink" in types
+
     completeness = audit(graph)
-    decision = decide(graph=graph, impact={"changed_files": []}, completeness=completeness)
-    assert decision["decision"]["merge_authorization"] == "not-determined"
     assert "unresolved_imports" not in completeness["residuals"]
     assert "unresolved_import_count" in completeness["residuals"]
 
@@ -178,12 +169,16 @@ def test_flask_django_express_and_stdlib_are_classified(tmp_path):
         "class Watch:\n"
         "    __tablename__ = 'watches'\n"
     )
-    (tmp_path / "app" / "urls.py").write_text("from django.urls import path\nurlpatterns = [path('crm/', views.crm)]\n")
+    (tmp_path / "app" / "urls.py").write_text(
+        "from django.urls import path\nurlpatterns = [path('crm/', views.crm)]\n"
+    )
     (tmp_path / "server.js").write_text("router.post('/pay', charge);\n")
+
     graph = build_graph(subject=tmp_path)
-    ids = {n["id"] for n in graph["nodes"]}
+    ids = {node["id"] for node in graph["nodes"]}
     specs = {row["specifier"] for row in graph["facts"]["unresolved_imports"]}
     roots = set(graph["facts"]["unresolved_package_roots"])
+
     assert "route:GET /status" in ids
     assert "route:POST /status" in ids
     assert "route:ANY crm/" in ids
@@ -193,7 +188,6 @@ def test_flask_django_express_and_stdlib_are_classified(tmp_path):
     assert "binascii" not in specs
     assert "stripe" in specs
     assert "" not in roots
-
 
 
 def test_completeness_ratchet_acknowledgement_is_not_repair():
@@ -208,22 +202,19 @@ def test_completeness_ratchet_acknowledgement_is_not_repair():
             }
         ]
     }
+
     blocked = audit(graph, overlay)
     assert blocked["integrity_pass"] is False
     assert "rls-missing:users" in blocked["unacknowledged_blocking_findings"]
     assert blocked["integrity"]["pass"] is False
-    decision = decide(graph=graph, impact={"changed_files": []}, completeness=blocked)
-    assert decision["decision"]["architecture_disposition"] == "blocked"
-    assert decision["decision"]["merge_authorization"] == "not-determined"
 
     overlay["acknowledged_findings"] = ["rls-missing:users"]
     known = audit(graph, overlay)
     assert known["integrity_pass"] is True
     assert "rls-missing:users" in known["acknowledged_findings"]
     assert "rls-missing:users" in known["integrity"]["known_violations"]
-    finding = next(item for item in known["semantic_findings"] if item["id"] == "rls-missing:users")
+
+    finding = next(
+        item for item in known["semantic_findings"] if item["id"] == "rls-missing:users"
+    )
     assert finding["acknowledged"] is True
-    passed = decide(graph=graph, impact={"changed_files": []}, completeness=known)
-    assert passed["decision"]["architecture_disposition"] == "review-required"
-    assert "known_violations_visible" in passed["decision"]["review_reasons"]
-    assert passed["decision"]["merge_authorization"] == "not-determined"
