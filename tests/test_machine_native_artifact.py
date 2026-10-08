@@ -26,7 +26,6 @@ def test_unresolved_ledger_is_lossless_and_core_graph_is_compact():
         "nodes": [],
         "edges": [],
         "facts": {"unresolved_imports": rows},
-        "metrics": {"node_count": 0, "edge_count": 0},
     }
     compact = compact_graph(graph, ledger)
     assert "unresolved_imports" not in compact["facts"]
@@ -85,7 +84,7 @@ def test_gn_targets_and_root_native_includes_form_machine_topology(tmp_path):
 
 def test_ascii_graph_ir_round_trips_topology_and_compacts_relations():
     graph = {
-        "schema_version": "1.8",
+        "schema_version": "1.11",
         "nodes": [
             {
                 "id": "a",
@@ -113,7 +112,6 @@ def test_ascii_graph_ir_round_trips_topology_and_compacts_relations():
             {"from": "b", "to": "c", "type": "consumes_contract", "evidence": "src/b.cc"},
         ],
         "facts": {"some_large_sidecar": ["not", "duplicated", "into", "ascii"]},
-        "metrics": {"node_count": 3, "edge_count": 3},
     }
 
     encoded = encode_graph_ascii(graph)
@@ -121,8 +119,8 @@ def test_ascii_graph_ir_round_trips_topology_and_compacts_relations():
 
     assert encoded.isascii()
     assert decoded["direction"] == "c>d"
-    assert decoded["metrics"]["node_count"] == 3
-    assert decoded["metrics"]["edge_count"] == 3
+    assert len(decoded["nodes"]) == 3
+    assert len(decoded["edges"]) == 3
     assert decoded["nodes"] == [
         {"id": "a", "type": "native_module", "source": "src/a.cc", "subsystem": "core"},
         {"id": "b", "type": "native_module", "source": "src/b.cc", "subsystem": "core"},
@@ -155,43 +153,12 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
     ledger = json.loads((out / "graph-unresolved-ledger.v1.json").read_text())
     receipt = json.loads((out / "graft-plus-receipt.json").read_text())
 
-    assert graph["schema_version"] == "1.10"
+    assert graph["schema_version"] == "1.11"
     assert change_set["role"] == "factual-change-set"
     assert change_set["requested"] is False
-    assert ascii_graph["metrics"]["node_count"] == graph["metrics"]["node_count"]
-    assert ascii_graph["metrics"]["edge_count"] == graph["metrics"]["edge_count"]
-    for derived_metric in (
-        "edge_counts_by_type",
-        "top_fan_in",
-        "top_fan_out",
-        "top_production_fan_in",
-        "static_cycles",
-    ):
-        assert derived_metric not in graph["metrics"]
-
-    for duplicated_fact in (
-        "inventory_file_count",
-        "relationship_parsed_file_count",
-        "relationship_unparsed_file_count",
-        "relationship_boundary_count",
-        "unresolved_relationship_boundary_count",
-        "relationship_boundary_counts_by_kind",
-        "contract_source_count",
-        "contract_declaration_count",
-        "configuration_key_count",
-        "deployment_fact_count",
-        "subsystem_count",
-        "cross_language_subsystem_count",
-        "build_definition_count",
-        "build_input_edge_count",
-        "build_target_count",
-        "build_target_input_edge_count",
-        "build_target_dependency_edge_count",
-        "governance_boundary_count",
-        "source_provenance_counts",
-        "evidence_precision_counts",
-    ):
-        assert duplicated_fact not in graph["metrics"]
+    assert len(ascii_graph["nodes"]) == len(graph["nodes"])
+    assert len(ascii_graph["edges"]) == len(graph["edges"])
+    assert "metrics" not in graph
     assert "unresolved_imports" not in graph["facts"]
     ledger_bytes = (out / "graph-unresolved-ledger.v1.json").read_bytes()
     assert graph["facts"]["unresolved_reference_ledger"]["sha256"] == hashlib.sha256(ledger_bytes).hexdigest()
