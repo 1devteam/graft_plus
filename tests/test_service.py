@@ -73,7 +73,11 @@ def test_build_artifact_uses_canonical_reconstruction(monkeypatch, tmp_path):
     with zipfile.ZipFile(io.BytesIO(artifact.body)) as archive:
         assert set(archive.namelist()) == set(PACK_FILES)
         assert archive.namelist()[0] == "00-AI-READ-FIRST.md"
-        assert b"Required answer discipline" in archive.read("00-AI-READ-FIRST.md")
+        assert b"G.R.A.F.T.+ is a fact instrument" in archive.read("00-AI-READ-FIRST.md")
+        assert "dependency-graph.ascii.v1.txt" in archive.namelist()
+        change_set = json.loads(archive.read("graph-change-set.v1.json"))
+        assert change_set["role"] == "factual-change-set"
+        assert change_set["requested"] is False
         graph = json.loads(archive.read("dependency-graph.v1.json"))
     assert graph["product"] == "G.R.A.F.T.+"
     assert artifact.node_count == graph["metrics"]["node_count"]
