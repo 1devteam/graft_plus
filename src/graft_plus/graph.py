@@ -366,7 +366,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             overlay_rel = str(overlay_path)
     overlay_count = sum(1 for n in nodes if n.get("layer") == "overlay")
     return {
-        "schema_version": "1.9",
+        "schema_version": "1.10",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -375,7 +375,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "semantic_provenance": {
             "semantic_authority": "1devteam/graft_plus",
             "canonical_engine": "python-universal-shell",
-            "canonical_schema_version": "1.9",
+            "canonical_schema_version": "1.10",
             "website_execution_authority": "1devteam/1devteam-web",
             "website_synchronization_mode": "github-reviewed-manual-port",
             "website_runtime_dependency": "none",
@@ -429,30 +429,6 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             "overlay_node_count": overlay_count,
             "unresolved_import_count": len(unresolved),
             "surface_count": len(surfaces),
-            "inventory_file_count": inventory_facts["file_count"],
-            "relationship_parsed_file_count": inventory_facts["relationship_parsed_file_count"],
-            "relationship_unparsed_file_count": inventory_facts["relationship_unparsed_file_count"],
-            "relationship_boundary_count": boundary_facts["relationship_boundary_count"],
-            "unresolved_relationship_boundary_count": boundary_facts[
-                "unresolved_relationship_boundary_count"
-            ],
-            "relationship_boundary_counts_by_kind": boundary_facts[
-                "relationship_boundary_counts_by_kind"
-            ],
-            "contract_source_count": contract_file_facts["contract_source_count"],
-            "contract_declaration_count": contract_file_facts["contract_declaration_count"],
-            "configuration_key_count": configuration_facts["configuration_key_count"],
-            "deployment_fact_count": configuration_facts["deployment_fact_count"],
-            "subsystem_count": architecture_facts["subsystem_count"],
-            "cross_language_subsystem_count": architecture_facts["cross_language_subsystem_count"],
-            "build_definition_count": architecture_facts["build_definition_count"],
-            "build_input_edge_count": architecture_facts["build_input_edge_count"],
-            "build_target_count": architecture_facts["build_target_count"],
-            "build_target_input_edge_count": architecture_facts["build_target_input_edge_count"],
-            "build_target_dependency_edge_count": architecture_facts["build_target_dependency_edge_count"],
-            "governance_boundary_count": architecture_facts["governance_boundary_count"],
-            "source_provenance_counts": architecture_facts["source_provenance_counts"],
-            "evidence_precision_counts": evidence_precision_counts,
         },
     }
 
