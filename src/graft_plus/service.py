@@ -13,8 +13,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Awaitable, Callable
 
+from graft_plus.ascii_ir import ASCII_GRAPH_FILE
+from graft_plus.change_set import CHANGE_SET_FILE
 from graft_plus.cli import reconstruct
 from graft_plus.fetch import CloneLimits, RepositoryLimitError, clone_public_repo, parse_public_repo, validate_ref
+from graft_plus.residuals import LEDGER_FILE
 
 AppReceive = Callable[[], Awaitable[dict[str, Any]]]
 AppSend = Callable[[dict[str, Any]], Awaitable[None]]
@@ -22,13 +25,12 @@ AppSend = Callable[[dict[str, Any]], Awaitable[None]]
 MAX_REQUEST_BYTES = 8 * 1024
 PACK_FILES = (
     "00-AI-READ-FIRST.md",
-    "graph-architecture-decision.json",
-    "graph-machine-index.v1.json",
+    ASCII_GRAPH_FILE,
     "dependency-graph.v1.json",
-    "graph-unresolved-ledger.v1.json",
+    CHANGE_SET_FILE,
+    "graph-machine-index.v1.json",
+    LEDGER_FILE,
     "graph-completeness-report.json",
-    "graph-impact-report.json",
-    "graph-proof-manifest.json",
     "graft-plus-receipt.json",
 )
 DEFAULT_ORIGINS = frozenset({"https://1devteam.com", "https://www.1devteam.com"})
