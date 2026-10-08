@@ -175,11 +175,14 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
 
     graph = json.loads((out / "dependency-graph.v1.json").read_text())
     ascii_graph = decode_graph_ascii((out / "dependency-graph.ascii.v1.txt").read_text())
+    change_set = json.loads((out / "graph-change-set.v1.json").read_text())
     ledger = json.loads((out / "graph-unresolved-ledger.v1.json").read_text())
     index = json.loads((out / "graph-machine-index.v1.json").read_text())
     receipt = json.loads((out / "graft-plus-receipt.json").read_text())
 
     assert graph["schema_version"] == "1.8"
+    assert change_set["role"] == "factual-change-set"
+    assert change_set["requested"] is False
     assert ascii_graph["metrics"]["node_count"] == graph["metrics"]["node_count"]
     assert ascii_graph["metrics"]["edge_count"] == graph["metrics"]["edge_count"]
     assert "unresolved_imports" not in graph["facts"]
@@ -192,5 +195,10 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
     ]
     assert index["unresolved"]["reference_count"] == 1
     assert receipt["machine_graph"] == "dependency-graph.ascii.v1.txt"
+    assert receipt["change_set"] == "graph-change-set.v1.json"
+    assert receipt["status_scope"] == "instrument-integrity-only"
     assert receipt["machine_index"] == "graph-machine-index.v1.json"
     assert receipt["residual_ledger"] == "graph-unresolved-ledger.v1.json"
+    assert not (out / "graph-impact-report.json").exists()
+    assert not (out / "graph-proof-manifest.json").exists()
+    assert not (out / "graph-architecture-decision.json").exists()
