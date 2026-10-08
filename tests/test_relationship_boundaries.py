@@ -1,7 +1,6 @@
 import json
 
 from graft_plus.completeness import audit
-from graft_plus.decision import decide
 from graft_plus.graph import build_graph
 
 
@@ -107,19 +106,19 @@ def test_generated_build_and_contract_inputs_are_visible(tmp_path):
     assert _boundary(graph, "build_module_mapping", "tsconfig.json")
 
 
-def test_boundary_summary_reaches_completeness_and_decision_without_granting_authority(tmp_path):
+def test_boundary_summary_reaches_completeness_without_adjudication(tmp_path):
     (tmp_path / "app.py").write_text("plugin = __import__(name)\n")
 
     graph = build_graph(subject=tmp_path)
     completeness = audit(graph, subject=tmp_path)
-    decision = decide(graph=graph, impact={"changed_files": []}, completeness=completeness)
 
     assert graph["schema_version"] == "1.8"
     assert graph["metrics"]["unresolved_relationship_boundary_count"] == 1
-    assert completeness["residuals"]["relationship_boundary_counts_by_kind"] == {"dynamic_load": 1}
-    assert "runtime_or_build_context_required" in decision["decision"]["review_reasons"]
-    assert decision["decision"]["merge_authorization"] == "not-determined"
-    assert decision["grants_execution_authority"] is False
+    assert completeness["residuals"]["relationship_boundary_counts_by_kind"] == {
+        "dynamic_load": 1
+    }
+    assert completeness["residuals"]["unresolved_relationship_boundary_count"] == 1
+    assert "decision" not in completeness
 
 
 def test_boundary_rows_are_deterministic_and_do_not_create_edges(tmp_path):
