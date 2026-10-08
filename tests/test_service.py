@@ -80,7 +80,9 @@ def test_build_artifact_uses_canonical_reconstruction(monkeypatch, tmp_path):
         assert change_set["requested"] is False
         graph = json.loads(archive.read("dependency-graph.v1.json"))
     assert graph["product"] == "G.R.A.F.T.+"
-    assert artifact.node_count == graph["metrics"]["node_count"]
+    assert artifact.node_count == len(graph["nodes"])
+    assert artifact.edge_count == len(graph["edges"])
+    assert "metrics" not in graph
 
 
 def _call_app(app, *, method, path, body=b"", origin=None):
