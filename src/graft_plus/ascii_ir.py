@@ -261,10 +261,4 @@ def decode_graph_ascii(text: str) -> dict[str, Any]:
         "source_graph_sha256": header["h"],
         "nodes": nodes,
         "edges": edges,
-        "metrics": {
-            "node_count": node_count,
-            "edge_count": edge_count,
-            "node_type_count": len(node_types),
-            "edge_type_count": len(edge_types),
-        },
     }
