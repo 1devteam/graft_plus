@@ -121,6 +121,22 @@ The receiving LLM derives these when a question requires them. This avoids
 persisting two representations of the same topology and keeps the canonical graph
 focused on observed identities, relationships, evidence, and reconstruction facts.
 
+## Schema 1.10 facts/metrics ownership
+
+Schema 1.10 removes observation counts from `metrics` when the same information is
+already owned by a factual producer.
+
+`facts` is now the canonical location for inventory, relationship-boundary,
+contract, configuration/deployment, subsystem, build, governance, provenance,
+and evidence-precision observations.
+
+`metrics` is intentionally narrow. It carries only graph shape and a small set of
+unique reconstruction counters that are not duplicated elsewhere.
+
+This prevents the same observation from being serialized twice under different
+names and keeps the receiving model from reconciling redundant copies of the same
+truth.
+
 ## ASCII topology IR v1
 
 `dependency-graph.ascii.v1.txt` is the primary LLM-facing topology projection.
