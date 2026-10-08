@@ -28,7 +28,6 @@ PACK_FILES = (
     ASCII_GRAPH_FILE,
     "dependency-graph.v1.json",
     CHANGE_SET_FILE,
-    "graph-machine-index.v1.json",
     LEDGER_FILE,
     "graph-completeness-report.json",
     "graft-plus-receipt.json",

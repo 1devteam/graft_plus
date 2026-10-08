@@ -4,7 +4,6 @@ import json
 from graft_plus.ascii_ir import decode_graph_ascii, encode_graph_ascii
 from graft_plus.cli import reconstruct
 from graft_plus.graph import build_graph
-from graft_plus.machine_index import build_machine_index
 from graft_plus.residuals import (
     build_unresolved_ledger,
     compact_graph,
@@ -35,29 +34,6 @@ def test_unresolved_ledger_is_lossless_and_core_graph_is_compact():
     assert pointer["reference_count"] == 3
     assert pointer["encoding"] == "dictionary-pairs-v1"
     assert len(pointer["sha256"]) == 64
-
-
-def test_machine_index_precomputes_topology_without_recommending_changes():
-    graph = {
-        "nodes": [
-            {"id": "a", "type": "native_module", "source": "a.cc", "subsystem": "one"},
-            {"id": "b", "type": "native_module", "source": "b.cc", "subsystem": "two"},
-            {"id": "c", "type": "contract", "source": "api.proto", "subsystem": "two"},
-        ],
-        "edges": [
-            {"from": "a", "to": "b", "type": "imports"},
-            {"from": "a", "to": "c", "type": "consumes_contract"},
-            {"from": "b", "to": "c", "type": "consumes_contract"},
-        ],
-        "facts": {},
-        "metrics": {},
-    }
-    ledger = build_unresolved_ledger([])
-    index = build_machine_index(graph, ledger)
-    assert index["top_dependency_fan_out"][0]["id"] == "a"
-    assert index["contract_hubs"][0]["id"] == "c"
-    assert index["cross_subsystem_edges"]
-    assert all("recommend" not in json.dumps(row).lower() for row in index["contract_hubs"])
 
 
 def test_gn_targets_and_root_native_includes_form_machine_topology(tmp_path):
@@ -177,7 +153,6 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
     ascii_graph = decode_graph_ascii((out / "dependency-graph.ascii.v1.txt").read_text())
     change_set = json.loads((out / "graph-change-set.v1.json").read_text())
     ledger = json.loads((out / "graph-unresolved-ledger.v1.json").read_text())
-    index = json.loads((out / "graph-machine-index.v1.json").read_text())
     receipt = json.loads((out / "graft-plus-receipt.json").read_text())
 
     assert graph["schema_version"] == "1.8"
@@ -193,12 +168,11 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
     assert decode_unresolved_ledger(ledger) == [
         {"specifier": "mystery_package", "from": "main.py"}
     ]
-    assert index["unresolved"]["reference_count"] == 1
     assert receipt["machine_graph"] == "dependency-graph.ascii.v1.txt"
     assert receipt["change_set"] == "graph-change-set.v1.json"
     assert receipt["status_scope"] == "instrument-integrity-only"
-    assert receipt["machine_index"] == "graph-machine-index.v1.json"
     assert receipt["residual_ledger"] == "graph-unresolved-ledger.v1.json"
+    assert not (out / "graph-machine-index.v1.json").exists()
     assert not (out / "graph-impact-report.json").exists()
     assert not (out / "graph-proof-manifest.json").exists()
     assert not (out / "graph-architecture-decision.json").exists()

@@ -50,7 +50,6 @@ def test_cli_writes_fact_pack(tmp_path):
         "dependency-graph.ascii.v1.txt",
         "dependency-graph.v1.json",
         "graph-change-set.v1.json",
-        "graph-machine-index.v1.json",
         "graph-unresolved-ledger.v1.json",
         "graph-completeness-report.json",
         "graft-plus-receipt.json",

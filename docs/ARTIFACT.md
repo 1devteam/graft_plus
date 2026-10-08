@@ -85,10 +85,6 @@ Schema 1.8 separates architectural truth from high-volume residual evidence.
 - `graph-unresolved-ledger.v1.json` preserves unresolved-reference evidence
   losslessly using dictionary tables plus integer reference pairs. It also carries
   class counts and bounded high-frequency summaries for fast inspection.
-- `graph-machine-index.v1.json` precomputes descriptive topology needed often by
-  downstream models: node/edge populations, fan-in/fan-out hubs, dependency hubs,
-  contract/build hubs, cross-subsystem traffic, isolated-node counts, and residual
-  summaries.
 
 This is a representation optimization, not evidence deletion. The ledger metadata
 embedded in the core graph includes a SHA-256 digest of the exact sidecar content.
@@ -99,8 +95,10 @@ repository evidence is sufficient. C/C++ quoted includes additionally resolve fr
 the repository root when that exact file exists, matching common monorepo include
 semantics without inventing build state.
 
-High degree, cross-subsystem traffic, and hub status are descriptive signals only.
-They are not refactor recommendations, defect classifications, or product plans.
+Topology summaries such as degree, hubs, crossings, and isolated nodes are no
+longer emitted as a second sidecar. They are cheap for the receiving LLM to
+derive from the ASCII topology and therefore do not justify a duplicate
+representation surface.
 
 ## ASCII topology IR v1
 
