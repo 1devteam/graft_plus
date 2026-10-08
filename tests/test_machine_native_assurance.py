@@ -90,3 +90,34 @@ def test_structural_gaps_remain_visible_without_disposition(tmp_path):
     assert report["residuals"]["unresolved_import_count"] == 1
     assert report["residuals"]["unresolved_package_roots"] == ["unknown_package"]
     assert "architecture_disposition" not in str(report)
+
+
+def test_completeness_report_does_not_precompute_topology_reasoning():
+    graph = {
+        "nodes": [
+            {"id": "a", "type": "python_module", "source": "a.py"},
+            {"id": "b", "type": "python_module", "source": "b.py"},
+        ],
+        "edges": [
+            {"from": "a", "to": "b", "type": "imports"},
+        ],
+        "facts": {"unresolved_imports": []},
+        "metrics": {"node_count": 2, "edge_count": 1, "static_cycles": []},
+    }
+
+    report = audit(graph)
+
+    assert report["role"] == "instrument-integrity"
+    for derived_field in (
+        "production_node_count",
+        "production_edge_count",
+        "boundary_counts",
+        "cross_boundary_edge_count",
+        "top_betweenness",
+        "top_transitive_consumers",
+        "boundary_matrix",
+        "static_cycles",
+        "static_cycle_count",
+        "semantic_reconciliation_counts",
+    ):
+        assert derived_field not in report
