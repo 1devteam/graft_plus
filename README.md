@@ -26,9 +26,9 @@ Live engine:
 - environment-name and deployment-structure topology without secret values
 - bounded source/line/symbol evidence anchors on generated facts
 - optional overlay (ownership, authority, policy) — residual until attached
-- blast radius when a git range is given
+- factual changed-file and direct source-to-node mapping when a git range is given
 - completeness ratchet (acknowledgement is not a repair)
-- architecture decision that never grants merge
+- instrument-integrity report with unresolved residuals kept visible
 
 ```bash
 pip install -e ".[dev]"
@@ -37,8 +37,10 @@ graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
 
 Give the complete pack to the receiving AI; `00-AI-READ-FIRST.md` tells it how to
 interpret the evidence without overstating what static reconstruction proves.
-The primary LLM topology surface is now `dependency-graph.ascii.v1.txt`; the JSON
-graph remains available for exact evidence-anchor lookup and compatibility.
+The primary LLM topology surface is `dependency-graph.ascii.v1.txt`; the JSON
+graph remains available for exact evidence-anchor lookup. When a git range is
+requested, `graph-change-set.v1.json` supplies only direct change seeds. The
+receiving LLM calculates reach, proof strategy, risk, and architecture itself.
 See [docs/ARTIFACT.md](docs/ARTIFACT.md).
 
 ## Website authority and synchronization
