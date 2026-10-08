@@ -7,6 +7,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from graft_plus.ascii_ir import ASCII_GRAPH_FILE, encode_graph_ascii
 from graft_plus.completeness import audit
 from graft_plus.decision import decide
 from graft_plus.fetch import clone_public_repo
@@ -48,21 +49,22 @@ residual ledgers instead of speculative edges.
 
 1. `graft-plus-receipt.json` — confirm product, subject revision, status, and
    authority limits.
-2. `graph-machine-index.v1.json` — start here for machine-scale topology:
-   node/edge populations, high fan-in/out, dependency hubs, cross-subsystem
-   traffic, and compact unresolved summaries.
-3. `graph-completeness-report.json` — check integrity, parser coverage,
+2. `dependency-graph.ascii.v1.txt` — primary LLM topology surface.
+   Node IDs/types/sources are dictionary-like rows; the fixed-width edge stream
+   encodes consumer -> relation -> dependency. Calculate dependency reach and
+   blast radius yourself from these facts.
+3. `dependency-graph.v1.json` — compatibility/evidence sidecar. Open it when
+   exact evidence anchors or graph fields omitted from the fast ASCII topology
+   are needed.
+4. `graph-completeness-report.json` — check integrity, parser coverage,
    residuals, stale evidence, boundaries, and acknowledged findings.
-4. `graph-architecture-decision.json` — use as a compact orientation summary,
-   not as permission or final judgment.
-5. `dependency-graph.v1.json` — inspect the compact core graph and
-   `evidence_anchor` objects behind material claims.
-6. `graph-unresolved-ledger.v1.json` — open only when unresolved-reference
+5. `graph-unresolved-ledger.v1.json` — open only when unresolved-reference
    detail is needed. It is lossless and dictionary encoded.
-7. `graph-impact-report.json` — use change-specific reach only when a git range
-   was requested. Empty fields with no requested range do not mean zero impact.
-8. `graph-proof-manifest.json` — inspect declared proof obligations; do not
-   treat selected tests as proof beyond what they actually exercise.
+6. `graph-machine-index.v1.json` — optional descriptive compatibility index.
+   Do not treat its summaries as architectural judgment.
+7. Legacy `graph-impact-report.json`, `graph-proof-manifest.json`, and
+   `graph-architecture-decision.json` remain compatibility sidecars in this
+   revision. They are not the primary reasoning surface or authority.
 
 ## How to reason from the graph
 
@@ -128,6 +130,11 @@ def _write_machine(path: Path, payload: dict) -> None:
     path.write_bytes(canonical_json_bytes(payload))
 
 
+def _write_ascii(path: Path, payload: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(payload, encoding="ascii")
+
+
 def _write_receiver_guide(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(AI_RECEIVER_GUIDE, encoding="utf-8")
@@ -173,6 +180,7 @@ def reconstruct(
     machine_index = build_machine_index(graph, unresolved_ledger)
     artifact_graph = compact_graph(graph, unresolved_ledger)
     _write_receiver_guide(out / "00-AI-READ-FIRST.md")
+    _write_ascii(out / ASCII_GRAPH_FILE, encode_graph_ascii(artifact_graph))
     _write_machine(out / "dependency-graph.v1.json", artifact_graph)
     _write_machine(out / LEDGER_FILE, unresolved_ledger)
     _write_machine(out / "graph-machine-index.v1.json", machine_index)
@@ -189,11 +197,14 @@ def reconstruct(
         "subject_sha": _git_sha(subject),
         "status": "passed" if completeness.get("integrity_pass") and not completeness.get("unacknowledged_blocking_findings") else "failed",
         "decipher": "graph-architecture-decision.json",
+        "machine_graph": ASCII_GRAPH_FILE,
         "machine_index": "graph-machine-index.v1.json",
+        "graph_json_compatibility": "dependency-graph.v1.json",
         "residual_ledger": LEDGER_FILE,
         "files": [
             "00-AI-READ-FIRST.md",
             "graph-architecture-decision.json",
+            ASCII_GRAPH_FILE,
             "graph-machine-index.v1.json",
             "dependency-graph.v1.json",
             "graph-unresolved-ledger.v1.json",
@@ -208,7 +219,7 @@ def reconstruct(
     }
     _write(out / "graft-plus-receipt.json", receipt)
     print(f"G.R.A.F.T.+ {receipt['status']}: {decision['decision']['architecture_disposition']}")
-    print(f"Decipher: {out / 'graph-architecture-decision.json'}")
+    print(f"Machine graph: {out / ASCII_GRAPH_FILE}")
     print(f"Graph: {graph['metrics']['node_count']} nodes, {graph['metrics']['edge_count']} edges")
     return 0 if receipt["status"] == "passed" else 1
 
