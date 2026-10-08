@@ -62,7 +62,7 @@ The remaining factual sidecars answer narrower questions:
   files, direct source-to-node mappings, and unmapped changed files. It contains
   no transitive reachability or test/proof selection.
 - `graph-completeness-report.json`: instrument integrity, stale evidence,
-  parser-coverage residuals, boundaries, cycles, and acknowledged findings.
+  parser-coverage residuals, unresolved boundaries, and acknowledged findings.
 - `graft-plus-receipt.json`: subject revision, artifact inventory, and the
   instrument-integrity-only status.
 
@@ -95,10 +95,10 @@ repository evidence is sufficient. C/C++ quoted includes additionally resolve fr
 the repository root when that exact file exists, matching common monorepo include
 semantics without inventing build state.
 
-Topology summaries such as degree, hubs, crossings, and isolated nodes are no
-longer emitted as a second sidecar. They are cheap for the receiving LLM to
-derive from the ASCII topology and therefore do not justify a duplicate
-representation surface.
+Topology summaries such as degree, hubs, crossings, isolated nodes, centrality,
+transitive reach, boundary matrices, cycle classification, and semantic
+corroboration are not part of the completeness report. They are derivable from
+the graph and belong to the receiving LLM rather than instrument self-validation.
 
 ## ASCII topology IR v1
 
