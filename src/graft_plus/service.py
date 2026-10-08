@@ -140,14 +140,13 @@ def build_artifact(repository: str, ref: str | None, limits: CloneLimits | None 
         body = _zip_pack(out)
     checksum = hashlib.sha256(body).hexdigest()
     filename = f"GRAFT-PACK-{owner}-{repo}-{subject_sha[:8]}.zip"
-    metrics = graph.get("metrics") or {}
     return Artifact(
         body=body,
         filename=filename,
         subject_sha=subject_sha,
         checksum=checksum,
-        node_count=int(metrics.get("node_count", 0)),
-        edge_count=int(metrics.get("edge_count", 0)),
+        node_count=len(graph.get("nodes") or []),
+        edge_count=len(graph.get("edges") or []),
     )
 
 
