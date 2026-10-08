@@ -266,9 +266,10 @@ def _classify_unresolved_imports(graph: dict[str, Any]) -> dict[str, int]:
         ] += 1
     return dict(sorted(counts.items()))
 
-def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: dict[str, Any] | None = None, subject: Path | None = None) -> dict[str, Any]:
+def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, subject: Path | None = None) -> dict[str, Any]:
+    """Validate the instrument output and expose unresolved factual residuals."""
+
     overlay = overlay or {}
-    impact = impact or {}
     node_id_counts = Counter(str(node.get("id") or "") for node in graph.get("nodes") or [] if node.get("id"))
     duplicate_node_ids = sorted(node_id for node_id, count in node_id_counts.items() if count > 1)
     duplicate_node_occurrences = sum(count - 1 for count in node_id_counts.values() if count > 1)
@@ -319,8 +320,6 @@ def audit(graph: dict[str, Any], overlay: dict[str, Any] | None = None, impact: 
         "unresolved_import_count": len((graph.get("facts") or {}).get("unresolved_imports") or []),
         "unresolved_import_classes": _classify_unresolved_imports(graph),
         "unresolved_package_roots": unresolved_roots,
-        "no_git_range": not bool(impact.get("changed_files")),
-        "unmapped_changed_files": list(impact.get("unmapped_changed_files") or []),
         "unmapped_source_file_count": coverage.get("unmapped_source_file_count", 0),
         "unmapped_source_files": coverage.get("unmapped_source_files") or [],
         "relationship_unparsed_file_count": coverage.get("relationship_unparsed_file_count", 0),

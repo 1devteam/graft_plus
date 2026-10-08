@@ -240,7 +240,16 @@ def _metrics(node_ids: list[str], edges: list[dict[str, Any]]) -> dict[str, Any]
         types[kind] += 1
         if kind == "imports":
             pairs.append((src, dst))
-    ranked = lambda counts: [{"node": n, "count": c} for n, c in sorted(((n, counts[n]) for n in node_ids), key=lambda i: (-i[1], i[0]))[:25] if c]
+    def ranked(counts: dict[str, int]) -> list[dict[str, Any]]:
+        return [
+            {"node": node_id, "count": count}
+            for node_id, count in sorted(
+                ((node_id, counts[node_id]) for node_id in node_ids),
+                key=lambda item: (-item[1], item[0]),
+            )[:25]
+            if count
+        ]
+
     return {
         "node_count": len(node_ids),
         "edge_count": len(edges),
