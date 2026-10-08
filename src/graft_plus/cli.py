@@ -152,7 +152,7 @@ def reconstruct(
     print(f"G.R.A.F.T.+ {status} (instrument integrity)")
     print(f"Machine graph: {out / ASCII_GRAPH_FILE}")
     print(f"Change set: {out / CHANGE_SET_FILE}")
-    print(f"Graph: {graph['metrics']['node_count']} nodes, {graph['metrics']['edge_count']} edges")
+    print(f"Graph: {len(graph.get('nodes') or [])} nodes, {len(graph.get('edges') or [])} edges")
     return 0 if status == "passed" else 1
 
 

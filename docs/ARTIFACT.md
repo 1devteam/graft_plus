@@ -130,12 +130,25 @@ already owned by a factual producer.
 contract, configuration/deployment, subsystem, build, governance, provenance,
 and evidence-precision observations.
 
-`metrics` is intentionally narrow. It carries only graph shape and a small set of
-unique reconstruction counters that are not duplicated elsewhere.
+`metrics` was narrowed in schema 1.10 and is removed entirely in schema 1.11.
 
 This prevents the same observation from being serialized twice under different
 names and keeps the receiving model from reconciling redundant copies of the same
 truth.
+
+## Schema 1.11 canonical shape without metrics
+
+Schema 1.11 removes the canonical `metrics` container entirely.
+
+Graph shape is intrinsic to the artifact: node count is `len(nodes)`, edge count is
+`len(edges)`, and the ASCII header already carries both counts for stream
+validation. Overlay, unresolved, surface, parser, contract, configuration, build,
+governance, provenance, and evidence observations remain available from their
+canonical node/fact structures.
+
+No observation is retained solely for convenience when it can be recovered
+deterministically from canonical facts. Consumers that need counts calculate them
+at use time instead of forcing G.R.A.F.T. to serialize duplicate state.
 
 ## ASCII topology IR v1
 
