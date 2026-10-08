@@ -37,6 +37,8 @@ graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
 
 Give the complete pack to the receiving AI; `00-AI-READ-FIRST.md` tells it how to
 interpret the evidence without overstating what static reconstruction proves.
+The primary LLM topology surface is now `dependency-graph.ascii.v1.txt`; the JSON
+graph remains available for exact evidence-anchor lookup and compatibility.
 See [docs/ARTIFACT.md](docs/ARTIFACT.md).
 
 ## Website authority and synchronization
