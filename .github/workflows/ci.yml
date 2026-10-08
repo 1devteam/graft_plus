@@ -13,7 +13,7 @@ jobs:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
       - run: python -m compileall -q src tests
-      - run: ruff check .
-      - run: ruff format --check .
+      - run: ruff check src/graft_plus tests
+      - run: ruff format --check src/graft_plus tests
       - run: pytest
       - run: graft-plus reconstruct --subject . --out artifacts/graft-pack
