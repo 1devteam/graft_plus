@@ -13,7 +13,7 @@ authors = [{ name = "1devteam" }]
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.14"]
 service = ["uvicorn>=0.30,<1.0"]
 
 [project.scripts]
