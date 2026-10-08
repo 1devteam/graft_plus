@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import ast
 import json
-from collections import Counter, defaultdict
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -186,80 +186,12 @@ def collect_surfaces(subject: Path) -> list[StaticNode]:
     return nodes
 
 
-def _tarjan(nodes: list[str], pairs: list[tuple[str, str]]) -> list[list[str]]:
-    adj: dict[str, list[str]] = defaultdict(list)
-    for s, t in pairs:
-        adj[s].append(t)
-    index = 0
-    stack: list[str] = []
-    on_stack: set[str] = set()
-    indexes: dict[str, int] = {}
-    low: dict[str, int] = {}
-    components: list[list[str]] = []
-
-    def connect(node: str) -> None:
-        nonlocal index
-        indexes[node] = index
-        low[node] = index
-        index += 1
-        stack.append(node)
-        on_stack.add(node)
-        for target in adj[node]:
-            if target not in indexes:
-                connect(target)
-                low[node] = min(low[node], low[target])
-            elif target in on_stack:
-                low[node] = min(low[node], indexes[target])
-        if low[node] != indexes[node]:
-            return
-        component: list[str] = []
-        while True:
-            member = stack.pop()
-            on_stack.remove(member)
-            component.append(member)
-            if member == node:
-                break
-        if len(component) > 1:
-            components.append(sorted(component))
-
-    for node in nodes:
-        if node not in indexes:
-            connect(node)
-    return sorted(components, key=lambda c: (-len(c), c))
-
-
-def _metrics(node_ids: list[str], edges: list[dict[str, Any]]) -> dict[str, Any]:
-    fan_in: dict[str, int] = defaultdict(int)
-    fan_out: dict[str, int] = defaultdict(int)
-    types: Counter[str] = Counter()
-    pairs: list[tuple[str, str]] = []
-    for edge in edges:
-        src, dst, kind = str(edge["from"]), str(edge["to"]), str(edge["type"])
-        fan_out[src] += 1
-        fan_in[dst] += 1
-        types[kind] += 1
-        if kind == "imports":
-            pairs.append((src, dst))
-    def ranked(counts: dict[str, int]) -> list[dict[str, Any]]:
-        return [
-            {"node": node_id, "count": count}
-            for node_id, count in sorted(
-                ((node_id, counts[node_id]) for node_id in node_ids),
-                key=lambda item: (-item[1], item[0]),
-            )[:25]
-            if count
-        ]
+def _shape_metrics(node_ids: list[str], edges: list[dict[str, Any]]) -> dict[str, int]:
+    """Return graph shape only; topology analysis belongs to the receiver."""
 
     return {
         "node_count": len(node_ids),
         "edge_count": len(edges),
-        "edge_counts_by_type": dict(sorted(types.items())),
-        "top_fan_in": ranked(fan_in),
-        "top_fan_out": ranked(fan_out),
-        "top_production_fan_in": [
-            item for item in ranked(fan_in) if not str(item["node"]).startswith("test:")
-        ],
-        "static_cycles": _tarjan(node_ids, pairs),
     }
 
 
@@ -493,7 +425,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             "evidence_precision_counts": evidence_precision_counts,
         },
         "metrics": {
-            **_metrics(node_ids, edges),
+            **_shape_metrics(node_ids, edges),
             "overlay_node_count": overlay_count,
             "unresolved_import_count": len(unresolved),
             "surface_count": len(surfaces),
