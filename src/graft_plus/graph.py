@@ -366,7 +366,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             overlay_rel = str(overlay_path)
     overlay_count = sum(1 for n in nodes if n.get("layer") == "overlay")
     return {
-        "schema_version": "1.8",
+        "schema_version": "1.9",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -375,7 +375,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "semantic_provenance": {
             "semantic_authority": "1devteam/graft_plus",
             "canonical_engine": "python-universal-shell",
-            "canonical_schema_version": "1.8",
+            "canonical_schema_version": "1.9",
             "website_execution_authority": "1devteam/1devteam-web",
             "website_synchronization_mode": "github-reviewed-manual-port",
             "website_runtime_dependency": "none",
