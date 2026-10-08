@@ -74,8 +74,8 @@ def test_gn_targets_and_root_native_includes_form_machine_topology(tmp_path):
         "imports",
     ) in edge_keys
 
-    assert graph["metrics"]["build_target_count"] == 2
-    assert graph["metrics"]["build_target_dependency_edge_count"] == 1
+    assert graph["facts"]["build_target_count"] == 2
+    assert graph["facts"]["build_target_dependency_edge_count"] == 1
     unresolved = {
         (row["specifier"], row["from"])
         for row in graph["facts"]["unresolved_imports"]
@@ -155,7 +155,7 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
     ledger = json.loads((out / "graph-unresolved-ledger.v1.json").read_text())
     receipt = json.loads((out / "graft-plus-receipt.json").read_text())
 
-    assert graph["schema_version"] == "1.9"
+    assert graph["schema_version"] == "1.10"
     assert change_set["role"] == "factual-change-set"
     assert change_set["requested"] is False
     assert ascii_graph["metrics"]["node_count"] == graph["metrics"]["node_count"]
@@ -168,6 +168,30 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
         "static_cycles",
     ):
         assert derived_metric not in graph["metrics"]
+
+    for duplicated_fact in (
+        "inventory_file_count",
+        "relationship_parsed_file_count",
+        "relationship_unparsed_file_count",
+        "relationship_boundary_count",
+        "unresolved_relationship_boundary_count",
+        "relationship_boundary_counts_by_kind",
+        "contract_source_count",
+        "contract_declaration_count",
+        "configuration_key_count",
+        "deployment_fact_count",
+        "subsystem_count",
+        "cross_language_subsystem_count",
+        "build_definition_count",
+        "build_input_edge_count",
+        "build_target_count",
+        "build_target_input_edge_count",
+        "build_target_dependency_edge_count",
+        "governance_boundary_count",
+        "source_provenance_counts",
+        "evidence_precision_counts",
+    ):
+        assert duplicated_fact not in graph["metrics"]
     assert "unresolved_imports" not in graph["facts"]
     ledger_bytes = (out / "graph-unresolved-ledger.v1.json").read_bytes()
     assert graph["facts"]["unresolved_reference_ledger"]["sha256"] == hashlib.sha256(ledger_bytes).hexdigest()
