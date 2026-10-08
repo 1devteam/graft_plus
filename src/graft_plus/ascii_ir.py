@@ -192,8 +192,6 @@ def decode_graph_ascii(text: str) -> dict[str, Any]:
     edge_count = int(header["e"])
     node_width = int(header["nw"])
     relation_width = int(header["rw"])
-    type_width = int(header["tw"])
-
     node_types: dict[str, str] = {}
     edge_types: dict[str, str] = {}
     nodes_by_code: dict[str, dict[str, str]] = {}
