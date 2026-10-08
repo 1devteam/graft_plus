@@ -12,5 +12,8 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev]"
+      - run: python -m compileall -q src tests
+      - run: ruff check .
+      - run: ruff format --check .
       - run: pytest
       - run: graft-plus reconstruct --subject . --out artifacts/graft-pack
