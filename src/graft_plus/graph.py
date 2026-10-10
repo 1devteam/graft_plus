@@ -228,29 +228,32 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     ]
     edges.extend(e for e in semantic["edges"] if e.get("from") and e.get("to"))
     edges.extend(function_edges)
-    function_ids = {str(node["id"]) for node in function_nodes}
+    route_handlers: dict[tuple[str, str], list[str]] = {}
+    for node in function_nodes:
+        if not node.get("route_handler"):
+            continue
+        key = (str(node.get("source") or ""), str(node.get("name") or ""))
+        route_handlers.setdefault(key, []).append(str(node["id"]))
     for route in semantic["nodes"]:
         if route.get("type") != "http_route" or not route.get("handler"):
             continue
         source = str(route.get("source") or "")
-        module_id = python_by_source.get(source)
-        if not module_id:
+        candidates = route_handlers.get((source, str(route["handler"])), [])
+        if len(candidates) != 1:
             continue
-        target = f"fn:{module_id.removeprefix('py:')}:{route['handler']}"
-        if target in function_ids:
-            edges.append(
-                {
-                    "from": route["id"],
-                    "to": target,
-                    "type": "handled_by",
-                    "evidence": source,
-                    "start_line": route.get("start_line"),
-                    "end_line": route.get("end_line"),
-                    "symbol": route["handler"],
-                    "detector": route.get("detector") or "python_ast",
-                    "layer": "generated",
-                }
-            )
+        edges.append(
+            {
+                "from": route["id"],
+                "to": candidates[0],
+                "type": "handled_by",
+                "evidence": source,
+                "start_line": route.get("start_line"),
+                "end_line": route.get("end_line"),
+                "symbol": route["handler"],
+                "detector": route.get("detector") or "python_ast",
+                "layer": "generated",
+            }
+        )
     for item in overlay.get("edges") or []:
         edge = dict(item)
         edge.setdefault("layer", "overlay")
@@ -355,7 +358,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         except ValueError:
             overlay_rel = str(overlay_path)
     return {
-        "schema_version": "1.11",
+        "schema_version": "1.12",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -364,7 +367,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "semantic_provenance": {
             "semantic_authority": "1devteam/graft_plus",
             "canonical_engine": "python-universal-shell",
-            "canonical_schema_version": "1.11",
+            "canonical_schema_version": "1.12",
             "website_execution_authority": "1devteam/1devteam-web",
             "website_synchronization_mode": "github-reviewed-manual-port",
             "website_runtime_dependency": "none",
