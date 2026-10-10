@@ -169,12 +169,13 @@ def collect_migrations(subject: Path) -> tuple[list[dict[str, Any]], list[dict[s
                 columns[table].update(cols)
     for table in sorted(set(columns) | set(touched)):
         sources = sorted(touched.get(table, set()))
+        table_source = sources[-1] if sources else None
         nodes.append(
             {
                 "id": f"db:table:{table}",
                 "type": "database_table",
                 "label": table,
-                "source": sources[-1] if sources else None,
+                "source": table_source,
                 "layer": "generated",
                 "columns": sorted(columns.get(table, set())),
                 "rls_enabled": table in enabled,
@@ -182,6 +183,32 @@ def collect_migrations(subject: Path) -> tuple[list[dict[str, Any]], list[dict[s
                 "rls_policies": sorted(policies.get(table, set())),
             }
         )
+        if table in enabled or table in forced or policies.get(table):
+            boundary_id = f"security-boundary:rls:{table}"
+            nodes.append(
+                {
+                    "id": boundary_id,
+                    "type": "security_boundary",
+                    "boundary_kind": "row_level_security",
+                    "source": table_source,
+                    "layer": "generated",
+                    "table": table,
+                    "enabled": table in enabled,
+                    "forced": table in forced,
+                    "policies": sorted(policies.get(table, set())),
+                    "detector": "migration_sql",
+                }
+            )
+            edges.append(
+                {
+                    "from": f"db:table:{table}",
+                    "to": boundary_id,
+                    "type": "rls_enforced",
+                    "evidence": table_source,
+                    "detector": "migration_sql",
+                    "layer": "generated",
+                }
+            )
     return nodes, edges
 
 
@@ -283,7 +310,7 @@ def collect_egress(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
             {
                 "from": f"py:{module}",
                 "to": sink_id,
-                "type": "network_call",
+                "type": "direct_network_egress",
                 "evidence": rel,
                 "start_line": int(calls[0]["line"] or 1),
                 "end_line": int(calls[-1]["line"] or calls[0]["line"] or 1),
