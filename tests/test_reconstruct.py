@@ -68,7 +68,7 @@ def test_cli_writes_fact_pack(tmp_path):
 
     provenance = receipt["semantic_provenance"]
     assert provenance["semantic_authority"] == "1devteam/graft_plus"
-    assert provenance["canonical_schema_version"] == "1.12"
+    assert provenance["canonical_schema_version"] == "1.13"
     assert provenance["website_execution_authority"] == "1devteam/1devteam-web"
     assert provenance["website_synchronization_mode"] == "github-reviewed-manual-port"
     assert provenance["website_runtime_dependency"] == "none"
@@ -142,7 +142,12 @@ def test_semantic_inventory_from_ajenda_logic(tmp_path):
     types = {node["type"] for node in graph["nodes"]}
     assert "migration:0001_init" in ids
     assert "db:table:users" in ids
-    assert "route:GET /health" in ids
+    assert any(
+        node["type"] == "http_route"
+        and node.get("method") == "GET"
+        and node.get("path") == "/health"
+        for node in graph["nodes"]
+    )
     assert "migration" in types
     assert "database_table" in types
     assert "http_route" in types
@@ -178,10 +183,15 @@ def test_flask_django_express_and_stdlib_are_classified(tmp_path):
     specs = {row["specifier"] for row in graph["facts"]["unresolved_imports"]}
     roots = set(graph["facts"]["unresolved_package_roots"])
 
-    assert "route:GET /status" in ids
-    assert "route:POST /status" in ids
-    assert "route:ANY crm/" in ids
-    assert "route:POST /pay" in ids
+    route_keys = {
+        (node.get("method"), node.get("path"), node.get("source"))
+        for node in graph["nodes"]
+        if node["type"] == "http_route"
+    }
+    assert ("GET", "/status", "app/web.py") in route_keys
+    assert ("POST", "/status", "app/web.py") in route_keys
+    assert ("ANY", "crm/", "app/urls.py") in route_keys
+    assert ("POST", "/pay", "server.js") in route_keys
     assert "db:table:watches" in ids
     assert "ctypes" not in specs
     assert "binascii" not in specs
