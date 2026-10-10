@@ -150,7 +150,7 @@ No observation is retained solely for convenience when it can be recovered
 deterministically from canonical facts. Consumers that need counts calculate them
 at use time instead of forcing G.R.A.F.T. to serialize duplicate state.
 
-## ASCII topology IR v1
+## ASCII topology IR v2 (stable artifact filename)
 
 `dependency-graph.ascii.v1.txt` is the primary LLM-facing topology projection.
 
@@ -158,11 +158,14 @@ It is deterministic, ASCII-only, and contains observed graph structure rather th
 architectural judgment. It does not calculate blast radius, recommend changes, or
 grant authority.
 
+The current encoder emits a `G2` stream while the decoder remains compatible with legacy `G1` streams.
+
 The format uses:
 
 - compact node codes assigned over a deterministic node ordering;
 - compact node-type and relation dictionaries;
-- node rows carrying full node identity, type, source, and selected structural
+- a compact source-path dictionary so repeated source paths are serialized once;
+- node rows carrying full node identity, type, a source code, and selected structural
   classification fields;
 - a fixed-width edge stream where each record is
   `consumer-code + relation-code + dependency-code`;
@@ -218,3 +221,34 @@ The ASCII topology projection needs no special-case encoding for schema 1.12.
 The new node and relation types flow through the existing deterministic type and
 relation dictionaries, so callable responsibility topology is available on the
 primary LLM surface without duplicating evidence anchors.
+
+
+## Schema 1.13 observer fidelity
+
+Schema 1.13 increases source-backed visibility without moving judgment into the instrument.
+
+Route identity is split into two factual layers:
+
+- `route-declaration:<module-or-source>:<METHOD>:<relative-path>@L<line>` preserves every declaration independently, even when two modules declare the same method/path;
+- `runtime-route:<METHOD>:<fully-composed-path>` is emitted only when static router composition can be proven from explicit router/application construction and `include_router` relationships;
+- `composes_to` connects declaration identity to proven runtime identity.
+
+Dependency injection now distinguishes exact source declarations from unresolved container lookup. A source form such as `Depends(get_db)` remains a declared boundary and, when `get_db` resolves to a repository callable, emits `injects_dependency`. Dynamic token/container selection remains unresolved.
+
+Exact callable bindings retain source-declared keyword metadata such as provider, input model, side-effect class, and credential requirement. These fields are declaration evidence only; they do not imply activation, authorization, runtime reachability, invocation, or safety.
+
+Repeated callable/test/DI observations no longer duplicate topology edges. One `(from,to,type)` edge carries `occurrences` and a lossless bounded observation list when multiple source locations prove the same relationship.
+
+When no explicit overlay argument is supplied, the engine may discover a repository-owned reviewed overlay at one of the conventional paths:
+
+- `docs/contracts/dependency-graph.overlay.v1.json`
+- `.graft/dependency-graph.overlay.v1.json`
+- `.graft/overlay.json`
+
+This is not inferred policy. It is explicit repository content and remains an overlay layer distinct from generated observations.
+
+RLS declarations are additionally projected as `security_boundary` nodes with `rls_enforced` relationships. Source-level network calls are named `direct_network_egress` to distinguish raw observed egress from any separately declared egress authority.
+
+The primary ASCII artifact keeps its stable filename but schema 1.13 emits a `G2` topology stream. `G2` interns source paths in an `S<code>=<path>` dictionary; node rows reference source codes. This preserves the same topology while reducing repeated path text. The decoder remains backward-compatible with `G1`.
+
+None of these additions calculate blast radius, select proof, classify risk, recommend architecture, authorize execution, or authorize merge. They only expose more repository reality.

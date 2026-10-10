@@ -82,3 +82,91 @@ def test_same_local_route_in_different_modules_keeps_distinct_nodes(tmp_path):
     assert len(routes) == 2
     assert len({node["id"] for node in routes}) == 2
     assert {node["source"] for node in routes} == {"app/public.py", "app/admin.py"}
+    assert all(node["id"].startswith("route-declaration:app.") for node in routes)
+
+
+def test_route_declaration_and_proven_runtime_route_are_distinct(tmp_path):
+    app = tmp_path / "app"
+    app.mkdir()
+    (app / "__init__.py").write_text("")
+    (app / "routes.py").write_text(
+        "from fastapi import APIRouter\n"
+        "router = APIRouter(prefix='/tasks')\n"
+        "@router.get('/me')\n"
+        "def me():\n"
+        "    return {'ok': True}\n"
+    )
+    (app / "main.py").write_text(
+        "from fastapi import FastAPI\n"
+        "from app.routes import router as task_router\n"
+        "app = FastAPI()\n"
+        "app.include_router(task_router, prefix='/v1')\n"
+    )
+
+    graph = build_graph(subject=tmp_path)
+    nodes = {node["id"]: node for node in graph["nodes"]}
+
+    declaration = next(
+        node
+        for node in graph["nodes"]
+        if node["type"] == "http_route" and node.get("source") == "app/routes.py"
+    )
+    runtime = nodes["runtime-route:GET:/v1/tasks/me"]
+
+    assert declaration["route_identity"] == "declaration"
+    assert declaration["path"] == "/me"
+    assert runtime["route_identity"] == "runtime-composed"
+    assert runtime["path"] == "/v1/tasks/me"
+    assert any(
+        edge["from"] == declaration["id"]
+        and edge["to"] == runtime["id"]
+        and edge["type"] == "composes_to"
+        for edge in graph["edges"]
+    )
+
+
+def test_repository_owned_overlay_is_auto_discovered_as_fact(tmp_path):
+    contracts = tmp_path / "docs" / "contracts"
+    contracts.mkdir(parents=True)
+    (tmp_path / "app.py").write_text("VALUE = 1\n")
+    (contracts / "dependency-graph.overlay.v1.json").write_text(
+        '{"nodes":[{"id":"runtime-action:send","type":"runtime_action","source":"app.py"}],'
+        '"edges":[],'
+        '"invariants":[{"id":"tenant-isolation","status":"enforced","sources":["app.py"]}]}'
+    )
+
+    graph = build_graph(subject=tmp_path)
+    ids = {node["id"] for node in graph["nodes"]}
+
+    assert "runtime-action:send" in ids
+    assert graph["invariants"] == [
+        {"id": "tenant-isolation", "status": "enforced", "sources": ["app.py"]}
+    ]
+    assert graph["semantic_provenance"]["overlay_mode"] == "auto-discovered"
+
+
+def test_rls_is_explicit_security_boundary(tmp_path):
+    versions = tmp_path / "alembic" / "versions"
+    versions.mkdir(parents=True)
+    (versions / "0001_secure.py").write_text(
+        "from alembic import op\n"
+        "def upgrade():\n"
+        "    op.execute('ALTER TABLE tenants ENABLE ROW LEVEL SECURITY')\n"
+        "    op.execute('ALTER TABLE tenants FORCE ROW LEVEL SECURITY')\n"
+        "    op.execute('CREATE POLICY tenant_policy ON tenants USING (true)')\n"
+    )
+
+    graph = build_graph(subject=tmp_path)
+    nodes = {node["id"]: node for node in graph["nodes"]}
+    boundary = nodes["security-boundary:rls:tenants"]
+
+    assert boundary["boundary_kind"] == "row_level_security"
+    assert boundary["enabled"] is True
+    assert boundary["forced"] is True
+    assert boundary["policies"] == ["tenant_policy"]
+    assert any(
+        edge["from"] == "db:table:tenants"
+        and edge["to"] == boundary["id"]
+        and edge["type"] == "rls_enforced"
+        for edge in graph["edges"]
+    )

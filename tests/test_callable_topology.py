@@ -65,7 +65,13 @@ def test_callable_topology_maps_methods_nested_handlers_routes_bindings_and_test
     assert _edge(graph, register, binding["id"], "declares_binding")
     assert _edge(graph, binding["id"], handler, "binds_callable")
 
-    assert _edge(graph, "route:POST /run", route_handler, "handled_by")
+    route = next(
+        node
+        for node in graph["nodes"]
+        if node["type"] == "http_route" and node.get("path") == "/run"
+    )
+    assert route["id"].startswith("route-declaration:app.runtime:POST:/run@L")
+    assert _edge(graph, route["id"], route_handler, "handled_by")
     assert _edge(
         graph,
         "test:tests/test_runtime.py",
@@ -126,3 +132,75 @@ def test_ascii_projection_preserves_callable_topology(tmp_path):
         "fn:app.runtime:register.handler",
         "binds_callable",
     ) in edge_keys
+
+
+def test_di_provider_and_repeated_calls_preserve_facts_without_duplicate_topology(tmp_path):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "deps.py").write_text(
+        "def get_db():\n"
+        "    return object()\n"
+    )
+    (tmp_path / "app" / "api.py").write_text(
+        "from fastapi import APIRouter, Depends\n"
+        "from app.deps import get_db\n"
+        "router = APIRouter()\n"
+        "@router.get('/items')\n"
+        "def items(db=Depends(get_db)):\n"
+        "    get_db()\n"
+        "    get_db()\n"
+        "    return db\n"
+    )
+
+    graph = build_graph(subject=tmp_path)
+    route_handler = "fn:app.api:items"
+    provider = "fn:app.deps:get_db"
+
+    assert _edge(graph, route_handler, provider, "injects_dependency")
+    call_edges = [
+        edge
+        for edge in graph["edges"]
+        if edge["from"] == route_handler
+        and edge["to"] == provider
+        and edge["type"] == "calls_function"
+    ]
+    assert len(call_edges) == 1
+    assert call_edges[0]["occurrences"] == 2
+    assert len(call_edges[0]["observations"]) == 2
+
+    boundary = next(
+        row
+        for row in graph["facts"]["relationship_boundaries"]
+        if row["source"] == "app/api.py" and row["kind"] == "dependency_injection"
+    )
+    assert boundary["status"] == "declared"
+    assert boundary["target_symbol"] == "get_db"
+
+
+def test_callable_binding_preserves_declared_runtime_contract_fields(tmp_path):
+    (tmp_path / "app.py").write_text(
+        "def handler():\n"
+        "    return None\n"
+        "def register():\n"
+        "    return ActionDefinition(\n"
+        "        name='sales.qualify',\n"
+        "        handler=handler,\n"
+        "        provider='local_sales',\n"
+        "        input_model=SalesLeadInput,\n"
+        "        side_effect_class=SideEffectClass.INTERNAL_READ,\n"
+        "        credential_requirement=CredentialRequirement(provider='crm'),\n"
+        "    )\n"
+    )
+
+    graph = build_graph(subject=tmp_path)
+    binding = next(node for node in graph["nodes"] if node["type"] == "callable_binding")
+
+    assert binding["declared_fields"]["provider"] == "local_sales"
+    assert binding["declared_fields"]["input_model"] == {"symbol": "SalesLeadInput"}
+    assert binding["declared_fields"]["side_effect_class"] == {
+        "symbol": "SideEffectClass.INTERNAL_READ"
+    }
+    assert binding["declared_fields"]["credential_requirement"] == {
+        "call": "CredentialRequirement",
+        "keywords": {"provider": "crm"},
+    }

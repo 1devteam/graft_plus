@@ -118,6 +118,10 @@ def test_ascii_graph_ir_round_trips_topology_and_compacts_relations():
     decoded = decode_graph_ascii(encoded)
 
     assert encoded.isascii()
+    assert encoded.startswith("G2|")
+    assert "\nS" in encoded
+    assert encoded.count("src/a.cc") == 1
+    assert decoded["schema_version"] == "ascii-topology-v2"
     assert decoded["direction"] == "c>d"
     assert len(decoded["nodes"]) == 3
     assert len(decoded["edges"]) == 3
@@ -153,7 +157,7 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
     ledger = json.loads((out / "graph-unresolved-ledger.v1.json").read_text())
     receipt = json.loads((out / "graft-plus-receipt.json").read_text())
 
-    assert graph["schema_version"] == "1.12"
+    assert graph["schema_version"] == "1.13"
     assert change_set["role"] == "factual-change-set"
     assert change_set["requested"] is False
     assert len(ascii_graph["nodes"]) == len(graph["nodes"])

@@ -73,6 +73,49 @@ def _literal_string(node: ast.AST | None) -> str | None:
     return None
 
 
+def _declared_value(node: ast.AST) -> Any:
+    """Return source-backed declaration metadata without interpreting it."""
+
+    if isinstance(node, ast.Constant) and isinstance(node.value, (str, int, float, bool, type(None))):
+        return node.value
+    if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        values = [_declared_value(item) for item in node.elts]
+        if all(value is not None for value in values):
+            return values
+        return None
+    if isinstance(node, ast.Dict):
+        result: dict[str, Any] = {}
+        for key, value in zip(node.keys, node.values, strict=False):
+            key_value = _literal_string(key)
+            declared = _declared_value(value)
+            if key_value is None or declared is None:
+                return None
+            result[key_value] = declared
+        return result
+    name = _call_name(node)
+    if name:
+        return {"symbol": name}
+    if isinstance(node, ast.Call):
+        call_name = _call_name(node.func)
+        if call_name:
+            payload: dict[str, Any] = {"call": call_name}
+            keyword_values: dict[str, Any] = {}
+            for keyword in node.keywords:
+                if not keyword.arg:
+                    continue
+                declared = _declared_value(keyword.value)
+                if declared is not None:
+                    keyword_values[keyword.arg] = declared
+            if keyword_values:
+                payload["keywords"] = keyword_values
+            return payload
+    try:
+        rendered = ast.unparse(node).strip()
+    except (AttributeError, ValueError):
+        return None
+    return {"expression": rendered[:240]} if rendered else None
+
+
 def _decorated(item: ast.FunctionDef | ast.AsyncFunctionDef) -> bool:
     route_names = {"delete", "get", "head", "options", "patch", "post", "put", "route", "websocket"}
     for decorator in item.decorator_list:
@@ -341,6 +384,14 @@ def _binding_from_call(
         return None
     constructor = _call_name(call.func) or "call"
     binding_id = f"binding:{source}:{call.lineno}:{call.col_offset}:{identity}"
+    declared_fields: dict[str, Any] = {}
+    for keyword in call.keywords:
+        if not keyword.arg or keyword is handler_keyword or keyword is identity_keyword:
+            continue
+        value = _declared_value(keyword.value)
+        if value is not None:
+            declared_fields[keyword.arg] = value
+
     node = {
         "id": binding_id,
         "type": "callable_binding",
@@ -350,6 +401,7 @@ def _binding_from_call(
         "constructor": constructor,
         "handler_keyword": handler_keyword.arg,
         "identity_keyword": identity_keyword.arg,
+        "declared_fields": declared_fields,
         "start_line": call.lineno,
         "end_line": getattr(call, "end_lineno", call.lineno),
         "detector": "python_ast",
@@ -487,6 +539,34 @@ def collect_function_graph(
                 )
 
             for call in _calls_in(symbol.node):
+                call_name = _call_name(call.func) or ""
+                short_name = call_name.rsplit(".", 1)[-1]
+                if short_name in {"Depends", "Inject", "Provide"}:
+                    provider_node = call.args[0] if call.args else next(
+                        (
+                            keyword.value
+                            for keyword in call.keywords
+                            if keyword.arg in {"dependency", "provider", "call"}
+                        ),
+                        None,
+                    )
+                    provider_key = resolve(provider_node) if provider_node is not None else None
+                    if provider_key is not None and provider_key != symbol.key:
+                        participants.update((symbol.key, provider_key))
+                        call_edges.append(
+                            {
+                                "from": symbol.id,
+                                "to": f"fn:{provider_key[0]}:{provider_key[1]}",
+                                "type": "injects_dependency",
+                                "evidence": source,
+                                "start_line": call.lineno,
+                                "end_line": getattr(call, "end_lineno", call.lineno),
+                                "symbol": _call_name(provider_node) if provider_node is not None else None,
+                                "detector": "python_ast",
+                                "layer": "generated",
+                            }
+                        )
+
                 target_key = resolve(call.func)
                 if target_key is not None and target_key != symbol.key:
                     participants.update((symbol.key, target_key))

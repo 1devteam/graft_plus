@@ -19,13 +19,14 @@ Live engine:
 - Python, JavaScript/TypeScript/CommonJS, shell/Bats, Go, Rust, Ruby, PHP,
   C/C++, Java/Kotlin/Scala, C#, Lua, Elixir, and Swift source relationships
 - package, workspace, dependency, and entrypoint declarations
-- participation-based Python callable topology: functions, methods, nested handlers, calls, direct tests, route ownership, and exact literal callable bindings
-- migrations, tables, routes, contracts, network egress, and delivery surfaces
+- participation-based Python callable topology: functions, methods, nested handlers, calls, direct tests, explicit DI providers, route ownership, and exact literal callable bindings
+- source-qualified route declarations plus separately proven runtime route composition
+- migrations, tables, explicit RLS security boundaries, contracts, direct network egress, and delivery surfaces
 - source-and-line boundary ledger for relationships requiring build or runtime context
 - declaration topology for Proto, GraphQL, SQL, and Avro contract sources
 - environment-name and deployment-structure topology without secret values
 - bounded source/line/symbol evidence anchors on generated facts
-- optional overlay (ownership, authority, policy) — residual until attached
+- explicit repository-owned overlay discovery for reviewed ownership/authority/policy/invariant declarations; otherwise overlay remains absent
 - factual changed-file and direct source-to-node mapping when a git range is given
 - completeness ratchet (acknowledgement is not a repair)
 - instrument-integrity report with unresolved residuals kept visible
@@ -37,7 +38,7 @@ graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
 
 Give the complete pack to the receiving AI; `00-AI-READ-FIRST.md` tells it how to
 interpret the evidence without overstating what static reconstruction proves.
-The primary LLM topology surface is `dependency-graph.ascii.v1.txt`; the JSON
+The primary LLM topology surface is `dependency-graph.ascii.v1.txt`; schema 1.13 emits a G2 stream that interns repeated source paths while retaining G1 decode compatibility. The JSON
 graph remains available for exact evidence-anchor lookup. When a git range is
 requested, `graph-change-set.v1.json` supplies only direct change seeds. The
 receiving LLM calculates reach, proof strategy, risk, and architecture itself.
