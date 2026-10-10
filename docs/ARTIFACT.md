@@ -46,9 +46,8 @@ Intent is kept honest in two layers:
 
 - Generated facts identify manifests, READMEs, architecture decisions, and
   plan/specification documents without claiming that their contents are true.
-- A reviewed overlay may add subject-specific jobs, artifacts, inputs,
-  actions, authority boundaries, invariants, and proof bundles. Those concepts
-  are not guessed from names.
+- Literal source declarations may generate runtime job/action/input/artifact/provider/credential facts when their fields are statically present in repository code.
+- A reviewed overlay may add subject-specific authority boundaries, invariants, and other assertions that cannot be established generically from source. Those assertions remain distinct from generated observations.
 
 Function topology is participation-based. Python functions are emitted when
 they participate in an exact local or imported call, direct test import, route
@@ -252,3 +251,20 @@ RLS declarations are additionally projected as `security_boundary` nodes with `r
 The primary ASCII artifact keeps its stable filename but schema 1.13 emits a `G2` topology stream. `G2` interns source paths in an `S<code>=<path>` dictionary; node rows reference source codes. This preserves the same topology while reducing repeated path text. The decoder remains backward-compatible with `G1`.
 
 None of these additions calculate blast radius, select proof, classify risk, recommend architecture, authorize execution, or authorize merge. They only expose more repository reality.
+
+
+## Schema 1.14 literal runtime declaration topology
+
+Schema 1.14 ports the remaining generic factual layer learned from Ajenda's runtime-contract graph without importing Ajenda catalogs or adjudication.
+
+When Python source contains statically literal contract declarations, the engine may emit:
+
+- `business_job` nodes from declarations that explicitly name required inputs, produced outputs, or candidate actions;
+- `runtime_action` nodes from exact callable bindings that declare action-like runtime contract fields;
+- `runtime_input` and `runtime_artifact` nodes;
+- `runtime_input_contract`, `runtime_provider`, `side_effect_class`, and `credential_requirement` nodes;
+- source-backed relationships such as `candidate_action`, `requires_input`, `requires_artifact`, `produced_by`, `declares_input_model`, `declares_side_effect_class`, `uses_provider`, `requires_credential`, and `credential_for_provider`.
+
+The collector recognizes declaration shapes and literal fields, not Ajenda paths, job names, provider names, or business policy. Candidate actions are declarations, not proof of runtime selection. Credential requirements are declarations, not proof of credential availability or authorization. Produced artifacts are job-contract declarations, not proof that an execution actually produced them.
+
+G.R.A.F.T.+ still does not calculate runtime applicability, choose an action, decide whether an invariant matters, classify risk, select proof, recommend architecture, or authorize execution/merge. Those judgments remain with the receiving model and runtime evidence.

@@ -157,7 +157,7 @@ def test_cli_emits_machine_native_sidecars(tmp_path):
     ledger = json.loads((out / "graph-unresolved-ledger.v1.json").read_text())
     receipt = json.loads((out / "graft-plus-receipt.json").read_text())
 
-    assert graph["schema_version"] == "1.13"
+    assert graph["schema_version"] == "1.14"
     assert change_set["role"] == "factual-change-set"
     assert change_set["requested"] is False
     assert len(ascii_graph["nodes"]) == len(graph["nodes"])

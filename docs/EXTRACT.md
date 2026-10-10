@@ -23,10 +23,11 @@ Source lineage (do not copy Ajenda-only coupling):
 ## Stay in Ajenda
 
 - `scripts/validation/mission_contract_gate.py`
-- `graph_runtime_contract_*`, `graph_runtime_action_selection_*`
-- `graph_runtime_instantiated_applicability.py`
-- `graph_mission_instance_integrity.py`
-- `graph_semantic_inventory.py` (Ajenda overlay semantics)
+- Ajenda-specific runtime adjudication, action selection, instantiated applicability, and mission-instance integrity
+- Ajenda catalog contents, resolver policy, and product-specific runtime binding rules
+- Ajenda-specific semantic findings/adjudication
+
+Generic source-backed declaration *shapes* proven by those inventories now belong in `graft_plus`: literal job/action/input/artifact declarations, action input-model/provider/side-effect/credential fields, RLS/security facts, direct egress facts, and other repository-derived observations. Product catalogs and decisions do not.
 - `graft_plus_gate.py` as Ajenda's wrapper (may later *call* this package)
 - job catalog, capability resolver, composition engine
 - `docs/contracts/dependency-graph.overlay.v1.json` Ajenda instance

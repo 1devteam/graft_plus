@@ -21,6 +21,7 @@ Live engine:
 - package, workspace, dependency, and entrypoint declarations
 - participation-based Python callable topology: functions, methods, nested handlers, calls, direct tests, explicit DI providers, route ownership, and exact literal callable bindings
 - source-qualified route declarations plus separately proven runtime route composition
+- literal runtime declaration topology for jobs, actions, inputs, artifacts, providers, side-effect classes, and credential requirements
 - migrations, tables, explicit RLS security boundaries, contracts, direct network egress, and delivery surfaces
 - source-and-line boundary ledger for relationships requiring build or runtime context
 - declaration topology for Proto, GraphQL, SQL, and Avro contract sources
@@ -38,7 +39,7 @@ graft-plus reconstruct --repo owner/repo --out artifacts/graft-pack
 
 Give the complete pack to the receiving AI; `00-AI-READ-FIRST.md` tells it how to
 interpret the evidence without overstating what static reconstruction proves.
-The primary LLM topology surface is `dependency-graph.ascii.v1.txt`; schema 1.13 emits a G2 stream that interns repeated source paths while retaining G1 decode compatibility. The JSON
+The primary LLM topology surface is `dependency-graph.ascii.v1.txt`; schema 1.14 emits a G2 stream that interns repeated source paths while retaining G1 decode compatibility. The JSON
 graph remains available for exact evidence-anchor lookup. When a git range is
 requested, `graph-change-set.v1.json` supplies only direct change seeds. The
 receiving LLM calculates reach, proof strategy, risk, and architecture itself.
