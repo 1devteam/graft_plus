@@ -610,7 +610,6 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
         path_lit = str(declaration["path"])
         rel = str(declaration["source"])
         module = declaration["module"]
-        handler = str(declaration["handler"] or "")
         owner = str(declaration.get("router_owner") or "")
         scope = str(declaration.get("scope") or "module")
         line = int(declaration["start_line"])
