@@ -195,6 +195,59 @@ def load_overlay(path: Path | None) -> dict[str, Any]:
     return payload
 
 
+def _aggregate_occurrence_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Preserve repeated evidence without serializing duplicate topology edges."""
+
+    aggregate_types = {"calls_function", "tests_function", "injects_dependency"}
+    grouped: dict[tuple[str, str, str, str], list[dict[str, Any]]] = {}
+    passthrough: list[dict[str, Any]] = []
+    for edge in edges:
+        edge_type = str(edge.get("type") or "")
+        if edge_type not in aggregate_types:
+            passthrough.append(edge)
+            continue
+        key = (
+            str(edge.get("from") or ""),
+            str(edge.get("to") or ""),
+            edge_type,
+            str(edge.get("layer") or ""),
+        )
+        grouped.setdefault(key, []).append(edge)
+
+    aggregated: list[dict[str, Any]] = []
+    for key in sorted(grouped):
+        rows = grouped[key]
+        first = dict(rows[0])
+        observations: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        for row in rows:
+            observation = {
+                field: row.get(field)
+                for field in ("evidence", "start_line", "end_line", "symbol", "detector")
+                if row.get(field) is not None
+            }
+            token = json.dumps(observation, sort_keys=True, separators=(",", ":"))
+            if token in seen:
+                continue
+            seen.add(token)
+            observations.append(observation)
+        observations.sort(
+            key=lambda item: (
+                str(item.get("evidence") or ""),
+                int(item.get("start_line") or 0),
+                int(item.get("end_line") or 0),
+                str(item.get("symbol") or ""),
+            )
+        )
+        if observations:
+            first.update(observations[0])
+        first["occurrences"] = len(observations) or len(rows)
+        if len(observations) > 1:
+            first["observations"] = observations
+        aggregated.append(first)
+    return [*passthrough, *aggregated]
+
+
 def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str, Any]:
     subject = subject.resolve()
     py_roots = discover_python_roots(subject)
@@ -337,6 +390,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     )
     if missing:
         raise ValueError(f"undefined edge endpoints: {', '.join(missing)}")
+    edges = _aggregate_occurrence_edges(edges)
     attach_evidence_anchors(subject, nodes, edges)
     evidence_precision_counts = {
         "nodes": dict(
@@ -358,7 +412,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         except ValueError:
             overlay_rel = str(overlay_path)
     return {
-        "schema_version": "1.12",
+        "schema_version": "1.13",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -367,7 +421,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "semantic_provenance": {
             "semantic_authority": "1devteam/graft_plus",
             "canonical_engine": "python-universal-shell",
-            "canonical_schema_version": "1.12",
+            "canonical_schema_version": "1.13",
             "website_execution_authority": "1devteam/1devteam-web",
             "website_synchronization_mode": "github-reviewed-manual-port",
             "website_runtime_dependency": "none",
@@ -398,6 +452,8 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
                 "cross-language-subsystem-joins",
                 "governance-boundaries",
                 "evidence-anchors",
+                "route-declaration-composition",
+                "dependency-provider-topology",
             ],
             "function_roots": overlay.get("function_roots") or [],
             "overlay": overlay_rel,
