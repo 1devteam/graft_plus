@@ -266,6 +266,7 @@ def _aggregate_occurrence_edges(edges: list[dict[str, Any]]) -> list[dict[str, A
 
 def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str, Any]:
     subject = subject.resolve()
+    requested_overlay_path = overlay_path
     overlay_path = discover_overlay(subject, overlay_path)
     py_roots = discover_python_roots(subject)
     py_nodes, py_edges, py_unresolved = collect_python_graph(subject, py_roots)
@@ -442,7 +443,13 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             "website_execution_authority": "1devteam/1devteam-web",
             "website_synchronization_mode": "github-reviewed-manual-port",
             "website_runtime_dependency": "none",
-            "overlay_mode": "explicit" if overlay_path is not None else "none",
+            "overlay_mode": (
+                "explicit"
+                if requested_overlay_path is not None
+                else "auto-discovered"
+                if overlay_path is not None
+                else "none"
+            ),
         },
         "generated_from": {
             "python_roots": [str(p.relative_to(subject)) if p != subject else "." for p in py_roots],
