@@ -180,3 +180,41 @@ for targeted residual lookup.
 This split follows the machine-instrument rule: G.R.A.F.T. supplies observed facts
 in an efficient representation; the receiving LLM performs dependency reach,
 blast-radius, risk, architecture, and change reasoning.
+
+
+## Schema 1.12 callable responsibility topology
+
+Schema 1.12 raises Python callable identity to a first-class factual layer without
+turning the graph into a source dump.
+
+The collector still indexes definitions repository-wide, but emits a callable only
+when source evidence proves that it participates in system behavior. Participation
+includes:
+
+- exact calls between known repository callables;
+- `self` / `cls` method calls and simple exact instance-method calls;
+- direct test imports and direct test references to imported class methods;
+- route decoration and route-to-handler ownership;
+- entrypoint conventions;
+- exact literal callable bindings such as a constructor call that contains both
+  `name="job.complete"` and `handler=handler`;
+- explicit `function_roots` selected by a reviewed overlay.
+
+New callable identities preserve qualification:
+
+- top-level function: `fn:<module>:<function>`;
+- class method: `fn:<module>:<Class.method>` with node type `python_method`;
+- nested function: `fn:<module>:<outer.inner>`.
+
+Exact literal registration is represented as a `callable_binding` node. The
+declaring module/callable points to the binding with `declares_binding`; the
+binding points to the resolved callable with `binds_callable`.
+
+A callable binding is declaration evidence only. It does not prove that the
+registration is activated, reachable at runtime, authorized, invoked, or safe.
+Those conclusions remain with the receiving LLM and runtime proof.
+
+The ASCII topology projection needs no special-case encoding for schema 1.12.
+The new node and relation types flow through the existing deterministic type and
+relation dictionaries, so callable responsibility topology is available on the
+primary LLM surface without duplicating evidence anchors.

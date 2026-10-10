@@ -1,12 +1,20 @@
-# Architecture decision (decipher this first)
+# Decision boundary
 
-`graph-architecture-decision.json` is a summary of the map. It is not a plan and not a lease.
+G.R.A.F.T.+ does not emit an architecture-decision artifact.
 
-Always:
+Earlier research versions carried derived disposition fields and a
+`graph-architecture-decision.json` sidecar. Those outputs are retired from the
+canonical fact-substrate pack.
 
-- `merge_authorization: not-determined`
-- `grants_execution_authority: false`
-- `implementsPlan: false`
-- `full_ci_required: true`
+The current boundary is:
 
-`architecture_disposition` may be `clear`, `review-required`, or `blocked`. `clear` does not mean merge.
+- G.R.A.F.T.+ observes, identifies, relates, normalizes, and encodes;
+- the receiving LLM calculates reach and blast radius;
+- the receiving LLM selects proof;
+- the receiving LLM classifies risk;
+- the receiving LLM makes architectural and change decisions;
+- merge authorization remains `not-determined`;
+- execution authority is never granted by the artifact.
+
+This separation is deliberate: observed software reality must not be contaminated
+with the instrument author's architectural judgment.
