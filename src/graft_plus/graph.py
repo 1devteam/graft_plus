@@ -19,6 +19,7 @@ from graft_plus.graph_types import StaticEdge, StaticNode
 from graft_plus.inventory import collect_package_topology, inventory_nodes, relevant_files
 from graft_plus.languages import collect_additional_language_graph
 from graft_plus.runtime import is_runtime
+from graft_plus.runtime_declarations import collect_runtime_declarations
 
 SKIP_DIRS = {".git", "node_modules", "dist", "build", ".venv", "venv", "__pycache__", ".tox", ".mypy_cache"}
 
@@ -289,6 +290,8 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     nodes.extend(semantic["nodes"])
     function_nodes, function_edges = collect_function_graph(subject, overlay, python_by_source)
     nodes.extend(function_nodes)
+    runtime_declarations = collect_runtime_declarations(subject, function_nodes)
+    nodes.extend(runtime_declarations["nodes"])
     for item in overlay.get("nodes") or []:
         node = dict(item)
         node.setdefault("layer", "overlay")
@@ -299,6 +302,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
     ]
     edges.extend(e for e in semantic["edges"] if e.get("from") and e.get("to"))
     edges.extend(function_edges)
+    edges.extend(runtime_declarations["edges"])
     route_handlers: dict[tuple[str, str], list[str]] = {}
     for node in function_nodes:
         if not node.get("route_handler"):
@@ -430,7 +434,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         except ValueError:
             overlay_rel = str(overlay_path)
     return {
-        "schema_version": "1.13",
+        "schema_version": "1.14",
         "product": "G.R.A.F.T.+",
         "package": "graft_plus",
         "role": "fact-substrate",
@@ -439,7 +443,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
         "semantic_provenance": {
             "semantic_authority": "1devteam/graft_plus",
             "canonical_engine": "python-universal-shell",
-            "canonical_schema_version": "1.13",
+            "canonical_schema_version": "1.14",
             "website_execution_authority": "1devteam/1devteam-web",
             "website_synchronization_mode": "github-reviewed-manual-port",
             "website_runtime_dependency": "none",
@@ -479,6 +483,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
                 "evidence-anchors",
                 "route-declaration-composition",
                 "dependency-provider-topology",
+                "runtime-declaration-contracts",
             ],
             "function_roots": overlay.get("function_roots") or [],
             "overlay": overlay_rel,
@@ -495,6 +500,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             **contract_file_facts,
             **configuration_facts,
             **architecture_facts,
+            **runtime_declarations["facts"],
             "evidence_precision_counts": evidence_precision_counts,
         },
     }
