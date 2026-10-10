@@ -32,6 +32,8 @@ def test_python_runtime_boundaries_are_source_and_line_backed(tmp_path):
     assert [row["line"] for row in injection] == [4]
     assert [row["line"] for row in routes] == [5]
     assert dynamic[0]["status"] == "unresolved"
+    assert injection[0]["status"] == "declared"
+    assert injection[0]["target_symbol"] == "get_db"
     assert routes[0]["status"] == "declared"
 
 
@@ -112,7 +114,7 @@ def test_boundary_summary_reaches_completeness_without_adjudication(tmp_path):
     graph = build_graph(subject=tmp_path)
     completeness = audit(graph, subject=tmp_path)
 
-    assert graph["schema_version"] == "1.12"
+    assert graph["schema_version"] == "1.13"
     assert graph["facts"]["unresolved_relationship_boundary_count"] == 1
     assert completeness["residuals"]["relationship_boundary_counts_by_kind"] == {
         "dynamic_load": 1
