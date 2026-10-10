@@ -195,6 +195,22 @@ def load_overlay(path: Path | None) -> dict[str, Any]:
     return payload
 
 
+def discover_overlay(subject: Path, explicit: Path | None) -> Path | None:
+    """Use an explicit overlay or a repository-owned conventional reviewed overlay."""
+
+    if explicit is not None:
+        return explicit
+    for relative in (
+        "docs/contracts/dependency-graph.overlay.v1.json",
+        ".graft/dependency-graph.overlay.v1.json",
+        ".graft/overlay.json",
+    ):
+        candidate = subject / relative
+        if candidate.is_file():
+            return candidate
+    return None
+
+
 def _aggregate_occurrence_edges(edges: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Preserve repeated evidence without serializing duplicate topology edges."""
 
@@ -250,6 +266,7 @@ def _aggregate_occurrence_edges(edges: list[dict[str, Any]]) -> list[dict[str, A
 
 def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str, Any]:
     subject = subject.resolve()
+    overlay_path = discover_overlay(subject, overlay_path)
     py_roots = discover_python_roots(subject)
     py_nodes, py_edges, py_unresolved = collect_python_graph(subject, py_roots)
     production = {n.id[3:] for n in py_nodes}
@@ -425,6 +442,7 @@ def build_graph(*, subject: Path, overlay_path: Path | None = None) -> dict[str,
             "website_execution_authority": "1devteam/1devteam-web",
             "website_synchronization_mode": "github-reviewed-manual-port",
             "website_runtime_dependency": "none",
+            "overlay_mode": "explicit" if overlay_path is not None else "none",
         },
         "generated_from": {
             "python_roots": [str(p.relative_to(subject)) if p != subject else "." for p in py_roots],
