@@ -125,21 +125,26 @@ def encode_graph_ascii(graph: dict[str, Any]) -> str:
 
     node_types = _rank_types([str(node.get("type") or "") for node in nodes])
     edge_types = _rank_types([str(edge.get("type") or "") for edge in edges])
+    sources = sorted({str(node.get("source") or "") for node in nodes if node.get("source")})
     type_index = {value: index for index, value in enumerate(node_types)}
     relation_index = {value: index for index, value in enumerate(edge_types)}
+    source_index = {value: index for index, value in enumerate(sources)}
 
     node_width = _width(len(nodes))
     relation_width = _width(len(edge_types))
     type_width = _width(len(node_types))
+    source_width = _width(len(sources))
     graph_sha = hashlib.sha256(canonical_json_bytes(graph)).hexdigest()
 
     lines = [
-        "G1"
+        "G2"
         f"|n={len(nodes)}"
         f"|e={len(edges)}"
+        f"|s={len(sources)}"
         f"|nw={node_width}"
         f"|rw={relation_width}"
         f"|tw={type_width}"
+        f"|sw={source_width}"
         "|d=c>d"
         f"|h={graph_sha}",
     ]
@@ -148,12 +153,18 @@ def encode_graph_ascii(graph: dict[str, Any]) -> str:
         lines.append(f"T{_code(index, type_width)}={_escape(value)}")
     for index, value in enumerate(edge_types):
         lines.append(f"R{_code(index, relation_width)}={_escape(value)}")
+    for index, value in enumerate(sources):
+        lines.append(f"S{_code(index, source_width)}={_escape(value)}")
 
     for index, node in enumerate(nodes):
         fields = [
             _escape(node.get("id")),
             _code(type_index[str(node.get("type") or "")], type_width),
-            _escape(node.get("source")),
+            (
+                _code(source_index[str(node.get("source"))], source_width)
+                if node.get("source")
+                else ""
+            ),
             _escape(node.get("subsystem")),
             _escape(node.get("layer")),
             _escape(node.get("relationship_status")),
@@ -180,8 +191,9 @@ def decode_graph_ascii(text: str) -> dict[str, Any]:
     """Decode the ASCII topology projection for verification and tooling."""
 
     lines = text.splitlines()
-    if not lines or not lines[0].startswith("G1|"):
+    if not lines or not (lines[0].startswith("G1|") or lines[0].startswith("G2|")):
         raise ValueError("unsupported ASCII graph header")
+    version = lines[0].split("|", 1)[0]
 
     header: dict[str, str] = {}
     for part in lines[0].split("|")[1:]:
@@ -192,8 +204,10 @@ def decode_graph_ascii(text: str) -> dict[str, Any]:
     edge_count = int(header["e"])
     node_width = int(header["nw"])
     relation_width = int(header["rw"])
+    source_count = int(header.get("s", "0"))
     node_types: dict[str, str] = {}
     edge_types: dict[str, str] = {}
+    sources: dict[str, str] = {}
     nodes_by_code: dict[str, dict[str, str]] = {}
     edge_chunks: list[str] = []
 
@@ -204,16 +218,24 @@ def decode_graph_ascii(text: str) -> dict[str, Any]:
         elif line.startswith("R"):
             code, value = line[1:].split("=", 1)
             edge_types[code] = _unescape(value)
+        elif line.startswith("S"):
+            code, value = line[1:].split("=", 1)
+            sources[code] = _unescape(value)
         elif line.startswith("N"):
             code, raw = line[1:].split("=", 1)
             fields = raw.split("|")
             if len(fields) != 6:
                 raise ValueError("invalid ASCII node row")
             node_id, type_code, source, subsystem, layer, relationship_status = fields
+            decoded_source = (
+                sources[source]
+                if version == "G2" and source
+                else _unescape(source)
+            )
             node = {
                 "id": _unescape(node_id),
                 "type": node_types[type_code],
-                "source": _unescape(source),
+                "source": decoded_source,
             }
             optional = {
                 "subsystem": _unescape(subsystem),
@@ -231,6 +253,8 @@ def decode_graph_ascii(text: str) -> dict[str, Any]:
 
     if len(nodes_by_code) != node_count:
         raise ValueError("ASCII graph node count mismatch")
+    if version == "G2" and len(sources) != source_count:
+        raise ValueError("ASCII graph source dictionary count mismatch")
 
     edge_stream = "".join(edge_chunks)
     record_width = node_width + relation_width + node_width
@@ -256,7 +280,7 @@ def decode_graph_ascii(text: str) -> dict[str, Any]:
         for index in range(node_count)
     ]
     return {
-        "schema_version": "ascii-topology-v1",
+        "schema_version": "ascii-topology-v2" if version == "G2" else "ascii-topology-v1",
         "direction": header["d"],
         "source_graph_sha256": header["h"],
         "nodes": nodes,
