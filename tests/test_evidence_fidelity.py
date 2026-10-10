@@ -32,7 +32,7 @@ def test_every_source_backed_fact_has_a_bounded_evidence_anchor(tmp_path):
         "detector": "python_ast",
         "precision": "line",
     }
-    edge = _edge(graph, "py:app", route["id"], "exposes_route")
+    edge = _edge(graph, "py:app", route["id"], "declares_route")
     assert edge["evidence_anchor"]["start_line"] == 3
     assert edge["evidence_anchor"]["precision"] == "line"
     for node in graph["nodes"]:
