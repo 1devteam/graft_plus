@@ -603,6 +603,7 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
     nodes: list[dict[str, Any]] = []
     edges: list[dict[str, Any]] = []
     declaration_to_router: dict[str, tuple[str, str, str]] = {}
+    seen_declarations: set[str] = set()
 
     for declaration in declarations:
         method = str(declaration["method"])
@@ -615,6 +616,9 @@ def collect_routes(subject: Path) -> tuple[list[dict[str, Any]], list[dict[str, 
         line = int(declaration["start_line"])
         declaration_owner = str(module or rel)
         route_id = f"route-declaration:{declaration_owner}:{method}:{path_lit}@L{line}"
+        if route_id in seen_declarations:
+            continue
+        seen_declarations.add(route_id)
         nodes.append(
             {
                 "id": route_id,
