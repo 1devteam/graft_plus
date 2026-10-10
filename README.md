@@ -19,7 +19,7 @@ Live engine:
 - Python, JavaScript/TypeScript/CommonJS, shell/Bats, Go, Rust, Ruby, PHP,
   C/C++, Java/Kotlin/Scala, C#, Lua, Elixir, and Swift source relationships
 - package, workspace, dependency, and entrypoint declarations
-- participation-based Python function/call/test/route-handler topology
+- participation-based Python callable topology: functions, methods, nested handlers, calls, direct tests, route ownership, and exact literal callable bindings
 - migrations, tables, routes, contracts, network egress, and delivery surfaces
 - source-and-line boundary ledger for relationships requiring build or runtime context
 - declaration topology for Proto, GraphQL, SQL, and Avro contract sources
