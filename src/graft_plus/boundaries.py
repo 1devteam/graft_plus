@@ -31,6 +31,7 @@ def _row(
     evidence: str,
     reason: str,
     detector: str | None = None,
+    **details: Any,
 ) -> dict[str, Any]:
     return {
         "kind": kind,
@@ -41,6 +42,7 @@ def _row(
         "evidence": _evidence(evidence),
         "reason": reason,
         "detector": detector or ("python_ast" if language == "python" else "source_pattern"),
+        **{key: value for key, value in details.items() if value is not None},
     }
 
 
@@ -103,15 +105,32 @@ def _python_boundaries(source: str, text: str) -> list[dict[str, Any]]:
             "resolve",
         }
         if short_name in {"Depends", "Inject", "Provide"} or container_call:
+            provider = None
+            if short_name in {"Depends", "Inject", "Provide"}:
+                provider = node.args[0] if node.args else next(
+                    (
+                        keyword.value
+                        for keyword in node.keywords
+                        if keyword.arg in {"dependency", "provider", "call"}
+                    ),
+                    None,
+                )
+            provider_symbol = _call_name(provider) if provider is not None else None
+            statically_declared = bool(provider_symbol) and not container_call
             rows.append(
                 _row(
                     kind="dependency_injection",
-                    status="unresolved",
+                    status="declared" if statically_declared else "unresolved",
                     source=source,
                     line=line,
                     language="python",
                     evidence=segment,
-                    reason="Container or framework resolution selects the runtime provider.",
+                    reason=(
+                        "Source explicitly declares the dependency provider; callable topology may resolve it to a repository symbol."
+                        if statically_declared
+                        else "Container or framework resolution selects the runtime provider."
+                    ),
+                    target_symbol=provider_symbol,
                 )
             )
         if name.rsplit(".", 1)[-1] in {"include_router", "include", "mount"}:
