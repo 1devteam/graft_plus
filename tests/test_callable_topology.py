@@ -1,3 +1,4 @@
+from graft_plus.ascii_ir import decode_graph_ascii, encode_graph_ascii
 from graft_plus.graph import build_graph
 
 
@@ -94,3 +95,34 @@ def test_callable_root_can_deliberately_retain_methods_and_nested_functions(tmp_
     assert "fn:app.flow:Flow.step" in ids
     assert "fn:app.flow:build" in ids
     assert "fn:app.flow:build.inner" in ids
+
+
+def test_ascii_projection_preserves_callable_topology(tmp_path):
+    (tmp_path / "app").mkdir()
+    (tmp_path / "app" / "__init__.py").write_text("")
+    (tmp_path / "app" / "runtime.py").write_text(
+        "class Worker:\n"
+        "    def complete(self):\n"
+        "        return 1\n\n"
+        "def register():\n"
+        "    def handler():\n"
+        "        return Worker().complete()\n"
+        "    return ActionDefinition(name='job.complete', handler=handler)\n"
+    )
+
+    graph = build_graph(subject=tmp_path)
+    decoded = decode_graph_ascii(encode_graph_ascii(graph))
+    node_types = {node["id"]: node["type"] for node in decoded["nodes"]}
+    edge_keys = {(edge["from"], edge["to"], edge["type"]) for edge in decoded["edges"]}
+
+    assert node_types["fn:app.runtime:Worker.complete"] == "python_method"
+    binding = next(
+        node
+        for node in decoded["nodes"]
+        if node["type"] == "callable_binding"
+    )
+    assert (
+        binding["id"],
+        "fn:app.runtime:register.handler",
+        "binds_callable",
+    ) in edge_keys
